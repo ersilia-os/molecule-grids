@@ -3,6 +3,7 @@
 import html
 import math
 import re
+from collections import Counter
 from pathlib import Path
 
 from rdkit import Chem, RDLogger
@@ -38,7 +39,7 @@ class Grid:
     order : list of int
         Input indices in reading order (left to right, top to bottom, page by page).
     columns : int
-        Number of columns.
+        Number of columns (with ``squeeze``, possibly fewer than requested).
     max_columns : int
         Most columns that keep atom labels legible at this width, for these molecules.
     capacity : int
@@ -51,12 +52,12 @@ class Grid:
         One SVG document per figure. More than one only when the molecules exceed ``capacity``.
     """
 
-    def __init__(self, fmt, names, order, geometry, max_columns, capacity, pages):
+    def __init__(self, fmt, names, order, geometry, columns, max_columns, capacity, pages):
         self.format = fmt.name
         self._fmt = fmt
         self.names = names
         self.order = order
-        self.columns = geometry.columns
+        self.columns = columns
         self.max_columns = max_columns
         self.capacity = capacity
         self.bond_pt = geometry.bond_pt
@@ -182,7 +183,8 @@ def draw_grid(
     squeeze : bool
         Drop the square cells: each column is as wide as its widest molecule and each row
         as tall as its tallest, with molecules reordered to fill the figure. Same bond
-        length and columns; the figure comes out narrower than ``width``.
+        length; fewer columns are used if that fills the figure better. The figure comes
+        out narrower than ``width``.
 
     Returns
     -------
@@ -246,7 +248,8 @@ def draw_grid(
             names[i] = str(k + 1)
     line = acs.BOND * (acs.LINE_RATIO if fmt.name == "print" else slide.LINE_RATIO)
     pages = _render(geo, layouts, drawn, names, bold, line if frame else None)
-    return Grid(fmt, names, order, geo, max_columns, columns * max_rows, pages)
+    used = max(Counter(round(b, 2) for *_, b in place).most_common(1)[0][1] for _, _, place in layouts)  # per row
+    return Grid(fmt, names, order, geo, used, max_columns, columns * max_rows, pages)
 
 
 def _square_layout(geo, drawn, rows):
@@ -266,25 +269,27 @@ def _square_layout(geo, drawn, rows):
 
 def _tight_layout(geo, drawn, names, bold, idx, columns):
     """Aligned grid with each column as wide as its widest molecule and each row as tall as its
-    tallest, reordered to minimise area. Returns ``(W, H, [(i, cx, cy, baseline)])``."""
+    tallest. Tries every column count up to ``columns`` and two orderings, and keeps the
+    smallest (fullest) figure; ties keep more columns. Returns ``(W, H, [(i, cx, cy, baseline)])``."""
     gap, strip = geo.gap, geo.caption_base + 0.3 * geo.caption
     cw = {i: max(drawn[i][3], text_width(names[i], geo.caption, bold[i]) if names[i] else 0) for i in idx}
     ch = {i: drawn[i][4] for i in idx}
-    C = min(columns, len(idx))
-    R = math.ceil(len(idx) / C)
-
     by_width = sorted(idx, key=lambda i: -cw[i])  # similar widths share a column
-    cols = [sorted(by_width[c * R : (c + 1) * R], key=lambda i: -ch[i]) for c in range(C)]
-    a = [[col[r] for col in cols if r < len(col)] for r in range(R)]
     by_height = sorted(idx, key=lambda i: -ch[i])  # similar heights share a row
-    b = [sorted(by_height[r * C : (r + 1) * C], key=lambda i: -cw[i]) for r in range(R)]
+
+    def candidates(C):
+        R = math.ceil(len(idx) / C)
+        cols = [sorted(by_width[c * R : (c + 1) * R], key=lambda i: -ch[i]) for c in range(C)]
+        yield [[col[r] for col in cols if r < len(col)] for r in range(R)]
+        yield [sorted(by_height[r * C : (r + 1) * C], key=lambda i: -cw[i]) for r in range(R)]
 
     def size(grid):
         colw = [max(cw[row[c]] for row in grid if c < len(row)) for c in range(max(map(len, grid)))]
         rowh = [max(ch[i] for i in row) for row in grid if row]
         return colw, rowh, (2 * gap + sum(colw) + (len(colw) - 1) * gap) * (gap + sum(h + strip + gap for h in rowh))
 
-    grid = min((a, b), key=lambda g: size(g)[2])
+    grids = [g for C in range(min(columns, len(idx)), 0, -1) for g in candidates(C)]
+    grid = min(grids, key=lambda g: size(g)[2])  # first minimum: the most columns
     colw, rowh, _ = size(grid)
     place, y = [], gap
     for row, rh in zip((r for r in grid if r), rowh):

@@ -53,6 +53,7 @@ def test_squeeze():
     square = draw_grid(SMILES, NAMES, format="print", columns=4)
     tight = draw_grid(SMILES, NAMES, format="print", columns=4, squeeze=True, number=True)
     assert tight.bond_pt == square.bond_pt
+    assert square.columns == 4 and 1 <= tight.columns <= 4
     assert tight.width_in * tight.height_in < square.width_in * square.height_in
     assert sorted(tight.order) == list(range(len(SMILES)))
     assert [tight.names[i] for i in tight.order] == [str(k + 1) for k in range(len(SMILES))]
