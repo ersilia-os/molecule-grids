@@ -3,8 +3,8 @@
 A figure's width is a fraction of the format's base width (stylia's ``SIZE``): 7.09 in
 for print (Nature two-column) and 13 in for slides. The width is split into square cells,
 one per molecule, so the height follows from the number of rows. All molecules share one
-bond length: the largest at which the biggest molecule fits its cell, capped at ACS
-14.4 pt in print. Legibility sets a floor on the bond length (atom labels no smaller than
+bond length: the largest at which the biggest molecule fits its cell, capped at
+14.4 pt in print (ACS) and 20 pt on slides. Legibility sets a floor on the bond length (atom labels no smaller than
 stylia's ``FONTSIZE_SMALL``), which in turn bounds the columns. Rows grow as needed.
 """
 
@@ -27,8 +27,8 @@ class Format:
         Full figure width in inches (stylia ``SIZE``).
     min_label_pt : float
         Smallest atom label and caption, in pt (stylia ``FONTSIZE_SMALL``).
-    max_bond_pt : float or None
-        Largest bond length, in pt (ACS 14.4 pt for print; none for slides).
+    max_bond_pt : float
+        Largest bond length, in pt (ACS 14.4 pt for print; 20 pt for slides).
     target_cell_in : float
         Cell size used to pick a default number of columns, in inches.
     png_dpi : int
@@ -38,7 +38,7 @@ class Format:
     name: str
     size_in: float
     min_label_pt: float
-    max_bond_pt: float | None
+    max_bond_pt: float
     target_cell_in: float
     png_dpi: int
 
@@ -52,7 +52,7 @@ FORMATS = {
     # Nature two-column width.
     "print": Format("print", 7.09, 5.0, acs.ACS["bond"], 1.75, 300),
     # Wide slide.
-    "slide": Format("slide", 13.0, 8.0, None, 1.9, 150),
+    "slide": Format("slide", 13.0, 8.0, 20.0, 1.9, 150),
 }
 
 GAP = 1.6  # gap between cells and page margin, in bond lengths
@@ -125,8 +125,7 @@ def solve(fmt, width, columns, ink, caption_widths, caption_ratio):
     for _ in range(4):  # caption size and cell size depend on each other; converges fast
         cell = max(ink, caption_widths(caption))
         scale = width_pt / (2 * gap + columns * cell + (columns - 1) * gap)
-        if fmt.max_bond_pt is not None:
-            scale = min(scale, fmt.max_bond_pt / acs.BOND)
+        scale = min(scale, fmt.max_bond_pt / acs.BOND)
         caption = max(caption_ratio * acs.BOND, fmt.min_label_pt / scale)
     total = width_pt / scale
     cell = (total - 2 * gap - (columns - 1) * gap) / columns  # fill the width exactly

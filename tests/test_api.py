@@ -20,8 +20,9 @@ def test_width_follows_format(fmt, full):
         assert width_in(grid.pages[0]) == pytest.approx(w * full, abs=0.01)
 
 
-def test_print_bond_capped_at_acs():
-    assert draw_grid(["CCO"], format="print", columns=4).bond_pt == pytest.approx(14.4)
+@pytest.mark.parametrize("fmt, cap", [("print", 14.4), ("slide", 20.0)])
+def test_bond_capped(fmt, cap):
+    assert draw_grid(["CCO"], format=fmt, columns=4).bond_pt == pytest.approx(cap)
 
 
 def test_save_types(tmp_path):

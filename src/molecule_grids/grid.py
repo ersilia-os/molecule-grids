@@ -140,7 +140,8 @@ def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, nu
 
     The figure width is ``width`` times the format's full width (7.09 in for print,
     13 in for slides), as in stylia. All molecules share one bond length: the largest
-    at which the biggest molecule fits its cell, never above ACS 14.4 pt in print.
+    at which the biggest molecule fits its cell, never above 14.4 pt in print (ACS)
+    or 20 pt on slides.
 
     Parameters
     ----------

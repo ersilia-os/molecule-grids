@@ -27,7 +27,7 @@ draw_grid(smiles, names, format="slide", group=True, number=True).save("hits.png
 Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a fraction of the full format width (7.09 in for print, 13 in for slides).
 
 - Each molecule sits in a square cell, so the height follows from the number of rows.
-- All molecules share one bond length, set so the largest molecule fits its cell.
+- All molecules share one bond length, set so the largest molecule fits its cell (at most 14.4 pt in print, 20 pt on slides).
 - Columns are limited so that atom labels stay at least 5 pt (print) or 8 pt (slide). Rows are added as needed.
 - A figure holds up to 100 molecules; more raise `TooManyMolecules`. Save as `.gif` to get one frame per 100.
 
