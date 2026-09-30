@@ -29,13 +29,14 @@ Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a fracti
 - Each molecule sits in a square cell, so the height follows from the number of rows.
 - All molecules share one bond length, set so the largest molecule fits its cell (at most 14.4 pt in print, 20 pt on slides).
 - Columns are limited so that atom labels stay at least 5 pt (print) or 8 pt (slide). Rows are added as needed.
+- `squeeze=True` drops the square cells and reorders molecules into a tight grid: same bond length, narrower figure.
 - A figure holds up to 100 molecules; more raise `TooManyMolecules`. Save as `.gif` to get one frame per 100.
 
 ## Command line
 
 | Command | Description |
 |---|---|
-| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `-w`, `-c`, `--number`, `--group`, `--frame`) |
+| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `-w`, `-c`, `--number`, `--group`, `--frame`, `--squeeze`) |
 | `molecule-grids examples -o FILE` | Write random global-health drugs as a `.smi` file |
 | `molecule-grids app` | Launch the Streamlit app |
 

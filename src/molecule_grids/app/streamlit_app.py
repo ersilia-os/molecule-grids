@@ -22,9 +22,19 @@ EXAMPLE = examples.as_text(examples.DEFAULT)
 
 
 @st.cache_data(show_spinner="Drawing…")
-def figure(smiles, names, fmt, width, columns, number, group, frame):
+def figure(smiles, names, fmt, width, columns, number, group, frame, squeeze):
     """Draw the grid (``columns=None`` for the default); returns (pages, summary)."""
-    grid = draw_grid(smiles, names, format=fmt, width=width, columns=columns, number=number, group=group, frame=frame)
+    grid = draw_grid(
+        smiles,
+        names,
+        format=fmt,
+        width=width,
+        columns=columns,
+        number=number,
+        group=group,
+        frame=frame,
+        squeeze=squeeze,
+    )
     summary = {
         "columns": grid.columns,
         "max_columns": grid.max_columns,
@@ -175,10 +185,16 @@ with st.sidebar:
         value=False,
         help="Keeps analogues with the same scaffold together, in the same orientation.",
     )
+    squeeze = st.toggle(
+        "Squeeze",
+        value=False,
+        help="Drop the square cells and reorder molecules to fill the figure. Same bond length; "
+        "the figure gets narrower. Numbers follow the new order.",
+    )
     frame = st.toggle("Frame", value=False, help="A thin black outline around the whole figure.")
 
     if smiles:
-        _, auto = figure(tuple(smiles), tuple(names), mode, width, None, number, group, frame)
+        _, auto = figure(tuple(smiles), tuple(names), mode, width, None, number, group, frame, squeeze)
         with columns_slot:
             if auto["max_columns"] > 1:
                 # The range follows width, format and molecules: at most the columns that keep
@@ -222,7 +238,7 @@ if not smiles:
         )
     st.stop()
 
-pages, info = figure(tuple(smiles), tuple(names), mode, width, cols, number, group, frame)
+pages, info = figure(tuple(smiles), tuple(names), mode, width, cols, number, group, frame, squeeze)
 if len(pages) > 1:
     with st.container(key="callout-pages"):
         st.caption(

@@ -1,6 +1,7 @@
 """Molecule grids: the main entry point of the package."""
 
 import html
+import math
 import re
 from pathlib import Path
 
@@ -34,6 +35,8 @@ class Grid:
         ``"print"`` or ``"slide"``.
     names : list of str
         Caption of each molecule, in input order.
+    order : list of int
+        Input indices in reading order (left to right, top to bottom, page by page).
     columns : int
         Number of columns.
     max_columns : int
@@ -48,16 +51,19 @@ class Grid:
         One SVG document per figure. More than one only when the molecules exceed ``capacity``.
     """
 
-    def __init__(self, fmt, names, geometry, max_columns, capacity, pages):
+    def __init__(self, fmt, names, order, geometry, max_columns, capacity, pages):
         self.format = fmt.name
         self._fmt = fmt
         self.names = names
+        self.order = order
         self.columns = geometry.columns
         self.max_columns = max_columns
         self.capacity = capacity
         self.bond_pt = geometry.bond_pt
-        self.width_in = geometry.width * geometry.scale / sizing.PT_PER_IN
-        self.height_in = float(re.search(r"height='([\d.]+)pt'", pages[0]).group(1)) / sizing.PT_PER_IN
+        self.width_in, self.height_in = (
+            float(re.search(rf"{dim}='([\d.]+)pt'", pages[0]).group(1)) / sizing.PT_PER_IN
+            for dim in ("width", "height")
+        )
         self.pages = pages
 
     def __repr__(self):
@@ -135,8 +141,18 @@ def _to_mols(molecules):
     return mols
 
 
-def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, number=False, group=False, frame=False):
-    """Draw molecules as a grid of square cells.
+def draw_grid(
+    molecules,
+    names=None,
+    format="slide",
+    width=1.0,
+    columns=None,
+    number=False,
+    group=False,
+    frame=False,
+    squeeze=False,
+):
+    """Draw molecules as a grid of square cells (or a tight grid with ``squeeze``).
 
     The figure width is ``width`` times the format's full width (7.09 in for print,
     13 in for slides), as in stylia. All molecules share one bond length: the largest
@@ -157,12 +173,16 @@ def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, nu
         Number of columns. Defaults to a sensible number for the width. Rows are added as
         needed.
     number : bool
-        Replace captions with bold compound numbers 1, 2, 3... in input order.
+        Replace captions with bold compound numbers 1, 2, 3... in reading order.
     group : bool
         Place analogues that share a scaffold side by side. They share one orientation
-        regardless.
+        regardless. Ignored when ``squeeze`` is true.
     frame : bool
         Draw a thin black outline around the whole figure, in the format's bond line width.
+    squeeze : bool
+        Drop the square cells: each column is as wide as its widest molecule and each row
+        as tall as its tallest, with molecules reordered to fill the figure. Same bond
+        length and columns; the figure comes out narrower than ``width``.
 
     Returns
     -------
@@ -208,21 +228,77 @@ def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, nu
             f"Use fewer columns or a larger width."
         )
     geo = solve(columns)
-    rows = arrange(buckets, len(mols), columns, group)
     max_rows = max(1, MAX_MOLECULES // columns)
+    if squeeze:
+        chunks = [
+            list(range(k, min(k + columns * max_rows, len(mols)))) for k in range(0, len(mols), columns * max_rows)
+        ]
+        layouts = [_tight_layout(geo, drawn, names, bold, idx, columns) for idx in chunks]
+    else:
+        rows = arrange(buckets, len(mols), columns, group)
+        layouts = [_square_layout(geo, drawn, rows[p : p + max_rows]) for p in range(0, len(rows), max_rows)]
+        if len(layouts) > 1:  # GIF frames share the canvas of a full page
+            layouts = [(W, geo.page_height(max_rows), place) for W, _, place in layouts]
+    order = [i for _, _, place in layouts for i, *_ in place]
+    if number:  # numbers follow reading order
+        names = [None] * len(order)
+        for k, i in enumerate(order):
+            names[i] = str(k + 1)
     line = acs.BOND * (acs.LINE_RATIO if fmt.name == "print" else slide.LINE_RATIO)
-    pages = _pages(geo, drawn, names, bold, rows, max_rows, line if frame else None)
-    return Grid(fmt, names, geo, max_columns, columns * max_rows, pages)
+    pages = _render(geo, layouts, drawn, names, bold, line if frame else None)
+    return Grid(fmt, names, order, geo, max_columns, columns * max_rows, pages)
 
 
-def _pages(geo, drawn, names, bold, rows, max_rows, frame=None):
-    """Lay out rows of drawn molecules into SVG figures of at most ``max_rows`` rows each.
-
-    ``frame`` is the outline stroke width in drawing units, or None for no outline.
-    """
-    chunks = [rows[p : p + max_rows] for p in range(0, len(rows), max_rows)]
-    H = geo.page_height(max_rows if len(chunks) > 1 else len(rows))  # frames share one canvas
+def _square_layout(geo, drawn, rows):
+    """Square cells of equal size; returns ``(W, H, [(i, cx, cy, baseline)])``."""
     W, gap, cell = geo.width, geo.gap, geo.cell
+    place, y = [], gap
+    for r in rows:
+        rh = max(drawn[i][4] for i in r)  # tallest ink in the row
+        x = (W - (len(r) * cell + (len(r) - 1) * gap)) / 2  # centre partial rows
+        for i in r:
+            cy = y + cell / 2
+            place.append((i, x + cell / 2, cy, cy + rh / 2 + geo.caption_base))  # shared caption baseline
+            x += cell + gap
+        y += geo.row_pitch
+    return W, geo.page_height(len(rows)), place
+
+
+def _tight_layout(geo, drawn, names, bold, idx, columns):
+    """Aligned grid with each column as wide as its widest molecule and each row as tall as its
+    tallest, reordered to minimise area. Returns ``(W, H, [(i, cx, cy, baseline)])``."""
+    gap, strip = geo.gap, geo.caption_base + 0.3 * geo.caption
+    cw = {i: max(drawn[i][3], text_width(names[i], geo.caption, bold[i]) if names[i] else 0) for i in idx}
+    ch = {i: drawn[i][4] for i in idx}
+    C = min(columns, len(idx))
+    R = math.ceil(len(idx) / C)
+
+    by_width = sorted(idx, key=lambda i: -cw[i])  # similar widths share a column
+    cols = [sorted(by_width[c * R : (c + 1) * R], key=lambda i: -ch[i]) for c in range(C)]
+    a = [[col[r] for col in cols if r < len(col)] for r in range(R)]
+    by_height = sorted(idx, key=lambda i: -ch[i])  # similar heights share a row
+    b = [sorted(by_height[r * C : (r + 1) * C], key=lambda i: -cw[i]) for r in range(R)]
+
+    def size(grid):
+        colw = [max(cw[row[c]] for row in grid if c < len(row)) for c in range(max(map(len, grid)))]
+        rowh = [max(ch[i] for i in row) for row in grid if row]
+        return colw, rowh, (2 * gap + sum(colw) + (len(colw) - 1) * gap) * (gap + sum(h + strip + gap for h in rowh))
+
+    grid = min((a, b), key=lambda g: size(g)[2])
+    colw, rowh, _ = size(grid)
+    place, y = [], gap
+    for row, rh in zip((r for r in grid if r), rowh):
+        x = gap
+        for c, i in enumerate(row):
+            place.append((i, x + colw[c] / 2, y + rh / 2, y + rh + geo.caption_base))
+            x += colw[c] + gap
+        y += rh + strip + gap
+    return 2 * gap + sum(colw) + (len(colw) - 1) * gap, y, place
+
+
+def _render(geo, layouts, drawn, names, bold, frame=None):
+    """Write one SVG per layout on a shared canvas; ``frame`` is the outline width, or None."""
+    W, H = max(lay[0] for lay in layouts), max(lay[1] for lay in layouts)
     outline = ""
     if frame:  # stroke drawn inside the canvas edge
         outline = (
@@ -230,25 +306,19 @@ def _pages(geo, drawn, names, bold, rows, max_rows, frame=None):
             f"fill='none' stroke='#000' stroke-width='{frame:.2f}'/>"
         )
     pages = []
-    for page_rows in chunks:
-        body, y = [], gap
-        for r in page_rows:
-            rh = max(drawn[i][4] for i in r)  # tallest ink in the row
-            x = (W - (len(r) * cell + (len(r) - 1) * gap)) / 2  # centre partial rows
-            for i in r:
-                inner, x0, y0, w, h = drawn[i]
-                cx, cy = x + cell / 2, y + cell / 2  # cell centre
-                tx, ty = cx - w / 2 - x0, cy - h / 2 - y0  # ink centred in its square
-                body.append(f"<g transform='translate({tx:.2f},{ty:.2f})'>{inner}</g>")
-                if names[i]:  # captions share a baseline per row, just under the ink
-                    weight = " font-weight='bold'" if bold[i] else ""
-                    body.append(
-                        f"<text x='{cx:.2f}' y='{cy + rh / 2 + geo.caption_base:.2f}' "
-                        f"font-family=\"{acs.FONT_STACK}\" font-size='{geo.caption:.2f}' "
-                        f"text-anchor='middle' fill='#000'{weight}>{html.escape(names[i])}</text>"
-                    )
-                x += cell + gap
-            y += geo.row_pitch
+    for _, _, place in layouts:
+        body = []
+        for i, cx, cy, baseline in place:
+            inner, x0, y0, w, h = drawn[i]
+            tx, ty = cx - w / 2 - x0, cy - h / 2 - y0  # ink centred on (cx, cy)
+            body.append(f"<g transform='translate({tx:.2f},{ty:.2f})'>{inner}</g>")
+            if names[i]:
+                weight = " font-weight='bold'" if bold[i] else ""
+                body.append(
+                    f"<text x='{cx:.2f}' y='{baseline:.2f}' "
+                    f"font-family=\"{acs.FONT_STACK}\" font-size='{geo.caption:.2f}' "
+                    f"text-anchor='middle' fill='#000'{weight}>{html.escape(names[i])}</text>"
+                )
         pages.append(
             "<?xml version='1.0' encoding='utf-8'?>\n"
             f"<svg xmlns='http://www.w3.org/2000/svg' width='{W * geo.scale:.2f}pt' "
