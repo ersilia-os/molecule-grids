@@ -22,9 +22,9 @@ EXAMPLE = examples.as_text(examples.DEFAULT)
 
 
 @st.cache_data(show_spinner="Drawing…")
-def figure(smiles, names, fmt, width, columns, number, group):
+def figure(smiles, names, fmt, width, columns, number, group, frame):
     """Draw the grid (``columns=None`` for the default); returns (pages, summary)."""
-    grid = draw_grid(smiles, names, format=fmt, width=width, columns=columns, number=number, group=group)
+    grid = draw_grid(smiles, names, format=fmt, width=width, columns=columns, number=number, group=group, frame=frame)
     summary = {
         "columns": grid.columns,
         "max_columns": grid.max_columns,
@@ -175,9 +175,10 @@ with st.sidebar:
         value=False,
         help="Keeps analogues with the same scaffold together, in the same orientation.",
     )
+    frame = st.toggle("Frame", value=False, help="A thin black outline around the whole figure.")
 
     if smiles:
-        _, auto = figure(tuple(smiles), tuple(names), mode, width, None, number, group)
+        _, auto = figure(tuple(smiles), tuple(names), mode, width, None, number, group, frame)
         with columns_slot:
             if auto["max_columns"] > 1:
                 # The range follows width, format and molecules: at most the columns that keep
@@ -221,7 +222,7 @@ if not smiles:
         )
     st.stop()
 
-pages, info = figure(tuple(smiles), tuple(names), mode, width, cols, number, group)
+pages, info = figure(tuple(smiles), tuple(names), mode, width, cols, number, group, frame)
 if len(pages) > 1:
     with st.container(key="callout-pages"):
         st.caption(

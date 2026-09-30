@@ -17,7 +17,7 @@ grid = draw_grid(["CCO", "c1ccccc1O"], names=["Ethanol", "Phenol"], format="prin
 grid.save("grid.svg")  # .svg, .png, .pdf or .gif
 
 smiles, names = read_molecules("hits.csv")  # .csv with a smiles column, or .smi lines "SMILES name"
-draw_grid(smiles, names, format="slide", group=True, number=True).save("hits.png")
+draw_grid(smiles, names, format="slide", group=True, number=True, frame=True).save("hits.png")
 ```
 
 `draw_grid` takes SMILES or RDKit molecules. The returned `Grid` displays inline in Jupyter and reports its size, `bond_pt`, `columns`, `max_columns` and `capacity`.
@@ -35,7 +35,7 @@ Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a fracti
 
 | Command | Description |
 |---|---|
-| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `-w`, `-c`, `--number`, `--group`) |
+| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `-w`, `-c`, `--number`, `--group`, `--frame`) |
 | `molecule-grids examples -o FILE` | Write random global-health drugs as a `.smi` file |
 | `molecule-grids app` | Launch the Streamlit app |
 

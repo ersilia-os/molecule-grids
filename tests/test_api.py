@@ -44,6 +44,11 @@ def test_capacity_and_gif(tmp_path):
     assert gif.n_frames == len(grid.pages)
 
 
+def test_frame():
+    assert "stroke='#000'" not in draw_grid(["CCO"]).svg
+    assert "stroke='#000'" in draw_grid(["CCO"], frame=True).svg
+
+
 def test_errors():
     with pytest.raises(ValueError, match="invalid SMILES"):
         draw_grid(["CCO", "not-a-smiles"])

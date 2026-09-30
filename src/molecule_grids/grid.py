@@ -135,7 +135,7 @@ def _to_mols(molecules):
     return mols
 
 
-def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, number=False, group=False):
+def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, number=False, group=False, frame=False):
     """Draw molecules as a grid of square cells.
 
     The figure width is ``width`` times the format's full width (7.09 in for print,
@@ -161,6 +161,8 @@ def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, nu
     group : bool
         Place analogues that share a scaffold side by side. They share one orientation
         regardless.
+    frame : bool
+        Draw a thin black outline around the whole figure, in the format's bond line width.
 
     Returns
     -------
@@ -208,15 +210,25 @@ def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, nu
     geo = solve(columns)
     rows = arrange(buckets, len(mols), columns, group)
     max_rows = max(1, MAX_MOLECULES // columns)
-    pages = _pages(geo, drawn, names, bold, rows, max_rows)
+    line = acs.BOND * (acs.LINE_RATIO if fmt.name == "print" else slide.LINE_RATIO)
+    pages = _pages(geo, drawn, names, bold, rows, max_rows, line if frame else None)
     return Grid(fmt, names, geo, max_columns, columns * max_rows, pages)
 
 
-def _pages(geo, drawn, names, bold, rows, max_rows):
-    """Lay out rows of drawn molecules into SVG figures of at most ``max_rows`` rows each."""
+def _pages(geo, drawn, names, bold, rows, max_rows, frame=None):
+    """Lay out rows of drawn molecules into SVG figures of at most ``max_rows`` rows each.
+
+    ``frame`` is the outline stroke width in drawing units, or None for no outline.
+    """
     chunks = [rows[p : p + max_rows] for p in range(0, len(rows), max_rows)]
     H = geo.page_height(max_rows if len(chunks) > 1 else len(rows))  # frames share one canvas
     W, gap, cell = geo.width, geo.gap, geo.cell
+    outline = ""
+    if frame:  # stroke drawn inside the canvas edge
+        outline = (
+            f"\n<rect x='{frame / 2:.2f}' y='{frame / 2:.2f}' width='{W - frame:.2f}' height='{H - frame:.2f}' "
+            f"fill='none' stroke='#000' stroke-width='{frame:.2f}'/>"
+        )
     pages = []
     for page_rows in chunks:
         body, y = [], gap
@@ -241,6 +253,6 @@ def _pages(geo, drawn, names, bold, rows, max_rows):
             "<?xml version='1.0' encoding='utf-8'?>\n"
             f"<svg xmlns='http://www.w3.org/2000/svg' width='{W * geo.scale:.2f}pt' "
             f"height='{H * geo.scale:.2f}pt' viewBox='0 0 {W:.2f} {H:.2f}'>\n"
-            "<rect width='100%' height='100%' fill='#FFFFFF'/>\n" + "\n".join(body) + "\n</svg>\n"
+            "<rect width='100%' height='100%' fill='#FFFFFF'/>\n" + "\n".join(body) + outline + "\n</svg>\n"
         )
     return pages

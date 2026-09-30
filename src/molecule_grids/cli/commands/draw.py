@@ -11,13 +11,16 @@ from molecule_grids import FORMATS, TooManyMolecules, draw_grid, read_molecules
 @click.option("-c", "--columns", type=int, default=None, help="Number of columns [default: from width].")
 @click.option("--number", is_flag=True, help="Caption with bold compound numbers 1, 2, 3...")
 @click.option("--group", is_flag=True, help="Place analogues sharing a scaffold side by side.")
-def draw(input, output, fmt, width, columns, number, group):
+@click.option("--frame", is_flag=True, help="Outline the whole figure.")
+def draw(input, output, fmt, width, columns, number, group, frame):
     """Draw a grid from INPUT (.smi/.txt with 'SMILES name' lines, or .csv with a smiles column)."""
     smiles, names = read_molecules(input)
     if not smiles:
         raise click.ClickException(f"no valid molecules in {input}")
     try:
-        grid = draw_grid(smiles, names, format=fmt, width=width, columns=columns, number=number, group=group)
+        grid = draw_grid(
+            smiles, names, format=fmt, width=width, columns=columns, number=number, group=group, frame=frame
+        )
         grid.save(output)
     except (TooManyMolecules, ValueError, OSError) as e:
         raise click.ClickException(str(e)) from e
