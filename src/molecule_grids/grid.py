@@ -16,10 +16,11 @@ from molecule_grids.utils.logging import logger
 COMPOUND_NUMBER = re.compile(r"^\d+[a-z]{0,2}$")
 
 MAX_COLUMNS = 30
+MAX_MOLECULES = 100  # per figure; more are split into GIF frames
 
 
 class TooManyMolecules(ValueError):
-    """More molecules than fit on one page at the requested width and columns."""
+    """More molecules than ``MAX_MOLECULES`` for a single figure."""
 
 
 class Grid:
@@ -38,13 +39,13 @@ class Grid:
     max_columns : int
         Most columns that keep atom labels legible at this width, for these molecules.
     capacity : int
-        Most molecules that fit on one page.
+        Most molecules in one figure (``MAX_MOLECULES``, rounded down to whole rows).
     bond_pt : float
         Bond length in pt when the figure is placed at 100 %.
     width_in, height_in : float
         Figure size in inches (height of the first page).
     pages : list of str
-        One SVG document per page. More than one only when the molecules exceed ``capacity``.
+        One SVG document per figure. More than one only when the molecules exceed ``capacity``.
     """
 
     def __init__(self, fmt, names, geometry, max_columns, capacity, pages):
@@ -71,11 +72,10 @@ class Grid:
 
     def _single_page(self, what):
         if len(self.pages) > 1:
-            more = f", or use more columns (up to {self.max_columns})" if self.columns < self.max_columns else ""
             raise TooManyMolecules(
-                f"{len(self.names)} molecules need {len(self.pages)} pages at {self.columns} columns "
-                f"(one page holds {self.capacity}). Save as .gif to get one frame per page{more}; "
-                f"`.pages` holds each page as {what}."
+                f"{len(self.names)} molecules exceed the {self.capacity} that fit in one figure. "
+                f"Save as .gif to get {len(self.pages)} frames, or draw fewer molecules; "
+                f"`.pages` holds each frame as {what}."
             )
 
     @property
@@ -85,7 +85,7 @@ class Grid:
         Raises
         ------
         TooManyMolecules
-            If the grid spans several pages.
+            If the molecules exceed ``capacity``.
         """
         self._single_page("SVG")
         return self.pages[0]
@@ -96,7 +96,7 @@ class Grid:
         Parameters
         ----------
         path : str or Path
-            ``.svg``, ``.png``, ``.pdf`` or ``.gif``. A GIF has one frame per page and is the
+            ``.svg``, ``.png``, ``.pdf`` or ``.gif``. A GIF has one frame per ``capacity`` molecules and is the
             only type that accepts more molecules than ``capacity``.
 
         Returns
@@ -153,8 +153,8 @@ def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, nu
     width : float
         Fraction of the format's full width, in (0, 1].
     columns : int, optional
-        Number of columns. By default, a sensible number for the width, widened (up to
-        ``max_columns``) if the molecules would otherwise not fit on one page.
+        Number of columns. Defaults to a sensible number for the width. Rows are added as
+        needed.
     number : bool
         Replace captions with bold compound numbers 1, 2, 3... in input order.
     group : bool
@@ -198,8 +198,6 @@ def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, nu
     if columns is None:
         target = round(width * fmt.size_in / fmt.target_cell_in)
         columns = max(1, min(target, max_columns, len(molecules)))
-        while columns < max_columns and len(arrange(buckets, len(mols), columns, group)) > solve(columns).max_rows(fmt):
-            columns += 1  # widen before paginating
     elif not 1 <= columns <= max_columns:
         raise ValueError(
             f"{columns} columns do not fit: at width={width} ({width * fmt.size_in:.2f} in) at most "
@@ -208,13 +206,13 @@ def draw_grid(molecules, names=None, format="slide", width=1.0, columns=None, nu
         )
     geo = solve(columns)
     rows = arrange(buckets, len(mols), columns, group)
-    max_rows = geo.max_rows(fmt)
+    max_rows = max(1, MAX_MOLECULES // columns)
     pages = _pages(geo, drawn, names, bold, rows, max_rows)
     return Grid(fmt, names, geo, max_columns, columns * max_rows, pages)
 
 
 def _pages(geo, drawn, names, bold, rows, max_rows):
-    """Lay out rows of drawn molecules into SVG pages of at most ``max_rows`` rows."""
+    """Lay out rows of drawn molecules into SVG figures of at most ``max_rows`` rows each."""
     chunks = [rows[p : p + max_rows] for p in range(0, len(rows), max_rows)]
     H = geo.page_height(max_rows if len(chunks) > 1 else len(rows))  # frames share one canvas
     W, gap, cell = geo.width, geo.gap, geo.cell

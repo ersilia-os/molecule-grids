@@ -23,25 +23,17 @@ EXAMPLE = examples.as_text(examples.DEFAULT)
 
 @st.cache_data(show_spinner="Drawing…")
 def figure(smiles, names, fmt, width, columns, number, group):
-    """Draw the grid; returns (pages, summary, note). Too many columns falls back to the maximum."""
-    note = None
-    try:
-        grid = draw_grid(smiles, names, format=fmt, width=width, columns=columns, number=number, group=group)
-    except ValueError:
-        grid = draw_grid(smiles, names, format=fmt, width=width, number=number, group=group)
-        grid = draw_grid(smiles, names, format=fmt, width=width, columns=grid.max_columns, number=number, group=group)
-        note = (
-            f"{columns} columns do not fit at this width: using {grid.max_columns}, "
-            "the most that keep atom labels legible."
-        )
+    """Draw the grid (``columns=None`` for the default); returns (pages, summary)."""
+    grid = draw_grid(smiles, names, format=fmt, width=width, columns=columns, number=number, group=group)
     summary = {
         "columns": grid.columns,
+        "max_columns": grid.max_columns,
         "capacity": grid.capacity,
         "bond": grid.bond_pt,
         "width": grid.width_in,
         "height": grid.height_in,
     }
-    return grid.pages, summary, note
+    return grid.pages, summary
 
 
 def get_examples():
@@ -102,7 +94,7 @@ st.html("""
                                padding: 0.8rem 1rem 0.65rem !important; }
   .st-key-callout-skipped { --hue: #C98A1E; }
   .st-key-callout-empty   { --hue: #6C5CE7; }
-  .st-key-callout-columns, .st-key-callout-pages { --hue: #C98A1E; }
+  .st-key-callout-pages { --hue: #C98A1E; }
   [class*="st-key-callout-"] [data-testid="stCaptionContainer"] p { color: #2C3E50; font-weight: 500; }
   [class*="st-key-callout-"] [data-testid="stMarkdownContainer"],
   [class*="st-key-callout-"] [data-testid="stCaptionContainer"] { margin-bottom: 0 !important; }
@@ -176,13 +168,31 @@ with st.sidebar:
         f"{FORMATS['print'].size_in:g} in for print (as in stylia). "
         "Each molecule sits in a square cell, so the height follows.",
     )
-    cols = st.slider("Columns", 1, 10, 4)
+    columns_slot = st.container()  # filled below: its range depends on the other settings
     number = st.toggle("Number compounds 1, 2, 3…", help="Replaces names with bold numbers in input order.")
     group = st.toggle(
         "Group by scaffold",
         value=False,
         help="Keeps analogues with the same scaffold together, in the same orientation.",
     )
+
+    if smiles:
+        _, auto = figure(tuple(smiles), tuple(names), mode, width, None, number, group)
+        with columns_slot:
+            if auto["max_columns"] > 1:
+                # The range follows width, format and molecules: at most the columns that keep
+                # atom labels legible. Changing it resets the choice to the default for the width.
+                cols = st.slider(
+                    "Columns",
+                    1,
+                    auto["max_columns"],
+                    auto["columns"],
+                    key=f"columns-{mode}-{width}-{auto['max_columns']}",
+                    help="Up to the most that keep atom labels legible at this width.",
+                )
+            else:
+                cols = 1
+                st.caption("Columns: 1 (the most that fit at this width)")
 
     st.space("large")
     st.caption(
@@ -211,16 +221,12 @@ if not smiles:
         )
     st.stop()
 
-pages, info, note = figure(tuple(smiles), tuple(names), mode, width, cols, number, group)
-if note:
-    with st.container(key="callout-columns"):
-        st.caption(f":orange[:material/warning:] {note}")
+pages, info = figure(tuple(smiles), tuple(names), mode, width, cols, number, group)
 if len(pages) > 1:
     with st.container(key="callout-pages"):
         st.caption(
-            f":orange[:material/warning:] {len(smiles)} molecules exceed one page "
-            f"({info['capacity']} fit at {info['columns']} columns). Showing page 1 of {len(pages)}; "
-            "download the GIF for all pages, or add columns."
+            f":orange[:material/warning:] Showing the first {info['capacity']} of {len(smiles)} molecules. "
+            f"Download the GIF for all of them ({len(pages)} frames)."
         )
 
 svg = pages[0]
@@ -242,7 +248,7 @@ with st.container(border=True, key="card-figure"):
                 file_name=f"{stem}.gif",
                 mime="image/gif",
                 icon=":material/download:",
-                help="One frame per page.",
+                help=f"All molecules, {info['capacity']} per frame.",
             )
         else:
             st.download_button(

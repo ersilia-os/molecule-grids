@@ -32,7 +32,8 @@ def test_save_types(tmp_path):
 
 def test_capacity_and_gif(tmp_path):
     pool = [s for fam in FAMILIES for s, _ in fam] + [s for s, _ in SINGLES]
-    grid = draw_grid(pool * 3, format="print", width=0.5)
+    assert len(draw_grid(pool, format="print", width=0.5).pages) == 1  # rows grow as needed
+    grid = draw_grid(pool * 3, format="slide", width=0.5)  # > 100 molecules
     assert len(grid.pages) > 1
     with pytest.raises(TooManyMolecules):
         grid.save(tmp_path / "grid.svg")

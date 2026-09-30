@@ -5,8 +5,7 @@ for print (Nature two-column) and 13 in for slides. The width is split into squa
 one per molecule, so the height follows from the number of rows. All molecules share one
 bond length: the largest at which the biggest molecule fits its cell, capped at ACS
 14.4 pt in print. Legibility sets a floor on the bond length (atom labels no smaller than
-stylia's ``FONTSIZE_SMALL``), which in turn bounds the columns; the page height bounds
-the rows.
+stylia's ``FONTSIZE_SMALL``), which in turn bounds the columns. Rows grow as needed.
 """
 
 from dataclasses import dataclass
@@ -26,8 +25,6 @@ class Format:
         ``"print"`` or ``"slide"``.
     size_in : float
         Full figure width in inches (stylia ``SIZE``).
-    max_height_in : float
-        Tallest figure that fits a page or slide, in inches.
     min_label_pt : float
         Smallest atom label and caption, in pt (stylia ``FONTSIZE_SMALL``).
     max_bond_pt : float or None
@@ -40,7 +37,6 @@ class Format:
 
     name: str
     size_in: float
-    max_height_in: float
     min_label_pt: float
     max_bond_pt: float | None
     target_cell_in: float
@@ -53,10 +49,10 @@ class Format:
 
 
 FORMATS = {
-    # Nature two-column width; 247 mm maximum page height.
-    "print": Format("print", 7.09, 9.7, 5.0, acs.ACS["bond"], 1.75, 300),
-    # Wide slide (13 in); height left under a title on a 16:9 slide (7.3 in tall).
-    "slide": Format("slide", 13.0, 6.5, 8.0, None, 1.9, 150),
+    # Nature two-column width.
+    "print": Format("print", 7.09, 5.0, acs.ACS["bond"], 1.75, 300),
+    # Wide slide.
+    "slide": Format("slide", 13.0, 8.0, None, 1.9, 150),
 }
 
 GAP = 1.6  # gap between cells and page margin, in bond lengths
@@ -99,9 +95,6 @@ class Geometry:
 
     def page_height(self, rows):
         return 2 * self.gap + rows * self.row_pitch - self.gap
-
-    def max_rows(self, fmt):
-        return max(1, int((fmt.max_height_in * PT_PER_IN / self.scale - self.gap) // self.row_pitch))
 
 
 def solve(fmt, width, columns, ink, caption_widths, caption_ratio):

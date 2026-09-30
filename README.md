@@ -28,9 +28,8 @@ Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a fracti
 
 - Each molecule sits in a square cell, so the height follows from the number of rows.
 - All molecules share one bond length, set so the largest molecule fits its cell.
-- Columns are limited so that atom labels stay at least 5 pt (print) or 8 pt (slide).
-- Rows are limited by the page (9.7 in) or slide (6.5 in) height.
-- More molecules than fit on one page raise `TooManyMolecules`. Save as `.gif` to get one frame per page.
+- Columns are limited so that atom labels stay at least 5 pt (print) or 8 pt (slide). Rows are added as needed.
+- A figure holds up to 100 molecules; more raise `TooManyMolecules`. Save as `.gif` to get one frame per 100.
 
 ## Command line
 
