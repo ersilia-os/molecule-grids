@@ -19,6 +19,7 @@ COMPOUND_NUMBER = re.compile(r"^\d+[a-z]{0,2}$")
 
 MAX_COLUMNS = 30
 MAX_MOLECULES = 100  # per figure; more are split into GIF frames
+SQUEEZE_TOLERANCE = 0.10  # squeeze keeps more columns unless fewer save over 10 % of the area
 
 
 class TooManyMolecules(ValueError):
@@ -183,7 +184,7 @@ def draw_grid(
     squeeze : bool
         Drop the square cells: each column is as wide as its widest molecule and each row
         as tall as its tallest, with molecules reordered to fill the figure. Same bond
-        length; fewer columns are used if that fills the figure better. The figure comes
+        length; fewer columns are used if that saves over 10 % of the area. The figure comes
         out narrower than ``width``.
 
     Returns
@@ -270,7 +271,7 @@ def _square_layout(geo, drawn, rows):
 def _tight_layout(geo, drawn, names, bold, idx, columns):
     """Aligned grid with each column as wide as its widest molecule and each row as tall as its
     tallest. Tries every column count up to ``columns`` and two orderings, and keeps the
-    smallest (fullest) figure; ties keep more columns. Returns ``(W, H, [(i, cx, cy, baseline)])``."""
+    smallest (fullest) figure; dropping columns must save more than ``SQUEEZE_TOLERANCE`` of the area. Returns ``(W, H, [(i, cx, cy, baseline)])``."""
     gap, strip = geo.gap, geo.caption_base + 0.3 * geo.caption
     cw = {i: max(drawn[i][3], text_width(names[i], geo.caption, bold[i]) if names[i] else 0) for i in idx}
     ch = {i: drawn[i][4] for i in idx}
@@ -288,8 +289,11 @@ def _tight_layout(geo, drawn, names, bold, idx, columns):
         rowh = [max(ch[i] for i in row) for row in grid if row]
         return colw, rowh, (2 * gap + sum(colw) + (len(colw) - 1) * gap) * (gap + sum(h + strip + gap for h in rowh))
 
-    grids = [g for C in range(min(columns, len(idx)), 0, -1) for g in candidates(C)]
-    grid = min(grids, key=lambda g: size(g)[2])  # first minimum: the most columns
+    grid = None
+    for C in range(min(columns, len(idx)), 0, -1):
+        best = min(candidates(C), key=lambda g: size(g)[2])
+        if grid is None or size(best)[2] < (1 - SQUEEZE_TOLERANCE) * size(grid)[2]:
+            grid = best  # fewer columns only when clearly fuller
     colw, rowh, _ = size(grid)
     place, y = [], gap
     for row, rh in zip((r for r in grid if r), rowh):
