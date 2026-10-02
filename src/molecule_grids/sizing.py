@@ -9,11 +9,13 @@ figure height) in print and a 16:9 slide (7.31 in) on slides. stylia defines no 
 height, so these come from the same sources as its widths.
 """
 
+import math
 from dataclasses import dataclass
 
 from molecule_grids.depict import acs
 
 PT_PER_IN = 72.0
+MM_PER_PT = 25.4 / 72
 SIZES = {"small": 0.7, "medium": 1.0, "large": 1.4}  # molecule size, relative to medium
 
 
@@ -83,14 +85,16 @@ class Geometry:
         return 2.0 * self.caption
 
     @property
-    def row_pitch(self):
-        return self.cell + self.caption_base + 0.3 * self.caption + self.gap
+    def strip(self):
+        """Caption band under each row."""
+        return self.caption_base + 0.3 * self.caption
 
-    def page_height(self, rows):
-        return 2 * self.gap + rows * self.row_pitch - self.gap
+    def span(self, size):
+        """Columns that a molecule needing ``size`` drawing units of width spans."""
+        return min(self.columns, max(1, math.ceil((size + self.gap) / self.pitch - 1e-9)))
 
 
-def solve(fmt, width, factor, needed, caption):
+def solve(fmt, width, factor, largest, typical, caption):
     """Solve the grid geometry at a fixed molecule size.
 
     Parameters
@@ -101,23 +105,25 @@ def solve(fmt, width, factor, needed, caption):
         Figure width as a fraction of ``fmt.size_in``.
     factor : float
         Molecule size relative to ``fmt.bond_pt`` (a value of ``SIZES``).
-    needed : float
-        Smallest cell side that fits every molecule and caption, in drawing units.
+    largest : float
+        Width of the widest molecule (or caption), in drawing units; it must fit the figure.
+    typical : float
+        Cell side for a typical molecule, in drawing units; it sets the columns.
     caption : float
         Caption font size, in drawing units.
 
     Returns
     -------
     Geometry
-        As many columns as fit; spare width is spread between columns, so cells stay just
-        large enough. If not even one cell fits, the scale is reduced until it does
+        As many ``typical`` cells as fit; spare width is spread between columns. If the
+        largest molecule does not fit the width, the scale is reduced until it does
         (check ``bond_pt``).
     """
     gap = GAP * acs.BOND
     width_pt = width * fmt.size_in * PT_PER_IN
     scale = fmt.bond_pt * factor / acs.BOND
-    scale = min(scale, width_pt / (2 * gap + needed))  # one cell must fit
+    scale = min(scale, width_pt / (2 * gap + largest))  # the largest molecule must fit
     total = width_pt / scale
-    columns = max(1, int((total - gap) // (needed + gap)))
-    pitch = (total - 2 * gap + gap) / columns  # column centres are evenly spaced across the width
-    return Geometry(columns, needed, pitch, caption, scale, total)
+    columns = max(1, int((total - gap) // (typical + gap)))
+    pitch = (total - gap) / columns  # column centres evenly spaced; a cell is pitch - gap wide
+    return Geometry(columns, typical, pitch, caption, scale, total)

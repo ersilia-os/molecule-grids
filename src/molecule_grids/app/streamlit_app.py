@@ -39,8 +39,8 @@ def figure(smiles, names, fmt, width, size, number, group, frame, squeeze):
         "columns": grid.columns,
         "capacity": grid.capacity,
         "bond": grid.bond_pt,
-        "width": grid.width_in,
-        "height": grid.height_in,
+        "width": grid.width_mm,
+        "height": grid.height_mm,
     }
     return grid.pages, summary
 
@@ -162,21 +162,25 @@ with st.sidebar:
         required=True,
         width="stretch",
         format_func=lambda m: {"slide": ":material/desktop_windows: Slide", "print": ":material/print: Print"}[m],
-        help="Slide: RDKit colours, 13 in wide at full width. "
-        "Print: ChemDraw ACS 1996 style, 7.09 in (two journal columns) at full width, 14.4 pt bonds "
+        help="Slide: RDKit colours, 330 mm wide at full width. "
+        "Print: ChemDraw ACS 1996 style, 180 mm (two journal columns) at full width, 14.4 pt bonds "
         "at 100 %; insert the SVG at 100 % in Word or Illustrator to keep the dimensions.",
     )
-    width = st.slider(
-        "Width",
-        0.25,
-        1.0,
-        1.0,
-        0.05,
-        format="%.2f",
-        help=f"Fraction of the full width: {FORMATS['slide'].size_in:g} in for slides, "
-        f"{FORMATS['print'].size_in:g} in for print (as in stylia). "
-        "As many columns as fit; each molecule sits in a square cell, so the height follows.",
+    full_mm = FORMATS[mode].size_in * 25.4
+    share = st.slider(
+        f"Proportion of full width · {st.session_state.get('share', 100) / 100 * full_mm:.0f} mm",
+        25,
+        100,
+        100,
+        5,
+        key="share",
+        format="%d%%",
+        help=f"How much of the full width the figure takes. Full width is {FORMATS['print'].size_in * 25.4:.0f} mm "
+        f"in print (two journal columns; half is about one column) and {FORMATS['slide'].size_in * 25.4:.0f} mm "
+        "on slides (a wide slide), as in stylia. The width sets how many molecules fit per row; "
+        "the height follows, up to one page.",
     )
+    width = share / 100
     size = st.segmented_control(
         "Molecule size",
         ["small", "medium", "large"],
@@ -189,14 +193,15 @@ with st.sidebar:
     )
     squeeze = st.segmented_control(
         "Squeeze",
-        [False, "grid", "rows", "free"],
-        default=False,
+        ["rows", "grid", "free", False],
+        default="rows",
         required=True,
         width="stretch",
         format_func=lambda s: {False: "Off", "grid": "Grid", "rows": "Rows", "free": "Free"}[s],
-        help="Reorder and turn molecules to fill the figure, at the same bond length; the figure "
-        "gets smaller. Grid: aligned columns fitted to their molecules. Rows: rows flow like text. "
-        "Free: molecules interlock by their outlines. Numbers follow the new order.",
+        help="Reorder and turn molecules to fill the figure, at the same bond length and width; "
+        "only the height shrinks. Rows: rows flow like text. Grid: aligned columns fitted to their "
+        "molecules. Free: molecules interlock by their outlines. Off: square cells in input order. "
+        "Numbers follow the new order.",
     )
     group = st.toggle(
         "Group by scaffold",
@@ -255,7 +260,7 @@ with st.container(border=True, key="card-figure"):
         st.caption(
             f"{len(smiles)} structure{'s' if len(smiles) != 1 else ''} · "
             f"{'ACS 1996 print style' if mode == 'print' else 'Slide style'} · "
-            f"{info['width']:.2f} × {info['height']:.2f} in · bond {info['bond']:.1f} pt"
+            f"{info['width']:.0f} × {info['height']:.0f} mm · bond {info['bond']:.1f} pt"
         )
         if len(pages) > 1:
             st.download_button(

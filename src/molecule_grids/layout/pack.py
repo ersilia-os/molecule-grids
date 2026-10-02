@@ -17,7 +17,7 @@ import random
 import numpy as np
 
 SEED = 0
-TOLERANCE = 0.10  # fewer grid columns only when they save more than this share of the area
+TOLERANCE = 0.10  # fewer grid columns only when they save more than this share of the height
 
 
 def _anneal(state, cost, neighbour, iterations, rng):
@@ -53,11 +53,12 @@ def _box(i, r, dims, capw):
     return max(w, capw[i]), h
 
 
-def grid_pack(idx, columns, dims, capw, group, gap, strip):
+def grid_pack(idx, columns, max_width, dims, capw, group, gap, strip):
     """Tight aligned grid: column widths and row heights fit their largest molecule.
 
-    Tries column counts from ``columns`` down to half of it and keeps fewer columns only
-    when they save more than ``TOLERANCE`` of the area.
+    Tries column counts from ``columns`` down, keeping the grid within ``max_width``, and
+    keeps the one with the smallest height; fewer columns only when they save more than
+    ``TOLERANCE`` of it.
 
     Returns
     -------
@@ -78,8 +79,9 @@ def grid_pack(idx, columns, dims, capw, group, gap, strip):
                 r, c = divmod(k, C)
                 colw[c] = max(colw[c], w)
                 rowh[r] = max(rowh[r], h)
-        used = [w for w in colw if w > 0]
-        return (gap + sum(w + gap for w in used)) * (gap + sum(h + strip + gap for h in rowh if h > 0))
+        width = gap + sum(w + gap for w in colw if w > 0)
+        height = gap + sum(h + strip + gap for h in rowh if h > 0)
+        return height + 10 * max(0.0, width - max_width)  # too wide: heavily penalised
 
     def neighbour(state, rng):
         C, cells, rot = state
@@ -109,10 +111,12 @@ def grid_pack(idx, columns, dims, capw, group, gap, strip):
         return min(((C, a, rot), (C, b, rot)), key=size)
 
     best, best_cost = None, None
-    for C in range(min(columns, n), max(1, columns // 2) - 1, -1):
+    for C in range(min(columns, n), 0, -1):
         state, c = _anneal(start(C), size, neighbour, _iterations(n), rng)
         if best is None or c < (1 - TOLERANCE) * best_cost:
             best, best_cost = state, c
+        if c > 2 * best_cost:  # fewer columns only get taller from here
+            break
     C, cells, rot = best
     rows = [[(i, None if i is None else rot[group[i]]) for i in cells[r : r + C]] for r in range(0, len(cells), C)]
     rows = [row for row in rows if any(i is not None for i, _ in row)]
@@ -147,14 +151,9 @@ def rows_pack(idx, max_width, dims, capw, group, gap, strip):
             x += w + gap
         return rows + [row]
 
-    def size(state):
+    def size(state):  # the width is fixed, so only the height counts
         _, rot = state
-        width = height = 0.0
-        for row in breaks(state):
-            boxes = [_box(i, rot[group[i]], dims, capw) for i in row]
-            width = max(width, gap + sum(w + gap for w, _ in boxes))
-            height += max(h for _, h in boxes) + strip + gap
-        return width * (gap + height)
+        return gap + sum(max(_box(i, rot[group[i]], dims, capw)[1] for i in row) + strip + gap for row in breaks(state))
 
     def neighbour(state, rng):
         order, rot = state

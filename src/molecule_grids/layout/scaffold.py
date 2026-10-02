@@ -49,24 +49,41 @@ def prepare(mols):
     return mols, buckets
 
 
-def arrange(buckets, n, per_row, group):
-    """Assign molecule indices to grid rows.
+def arrange(buckets, n, per_row, group, span=None):
+    """Assign molecule indices to grid rows of ``per_row`` columns.
 
-    ``group=False`` keeps input order. ``group=True`` uses first-fit packing: families
-    (largest first) each go into the first row with room for the whole family, so a family
-    is never split unless it is wider than ``per_row``; singletons then fill the gaps.
+    ``span[i]`` is how many columns molecule ``i`` takes (1 by default). ``group=False``
+    keeps input order. ``group=True`` uses first-fit packing: families (largest first) each
+    go into the first row with room for the whole family, so a family is never split unless
+    it is wider than a row; singletons then fill the gaps.
     """
+    span = span or [1] * n
+
+    def chunks(items):
+        """Split items, in order, into runs that fit one row."""
+        run, used = [], 0
+        for i in items:
+            if run and used + span[i] > per_row:
+                yield run
+                run, used = [], 0
+            run.append(i)
+            used += span[i]
+        if run:
+            yield run
+
     if not group:
-        order = list(range(n))
-        return [order[k : k + per_row] for k in range(0, n, per_row)]
+        return list(chunks(range(n)))
     families = sorted((b for b in buckets.values() if len(b) > 1), key=len, reverse=True)
     singles = [[i] for b in buckets.values() if len(b) == 1 for i in b]
-    rows = []
+    rows, used = [], []
     for fam in families + singles:
-        for chunk in (fam[k : k + per_row] for k in range(0, len(fam), per_row)):
-            row = next((r for r in rows if len(r) + len(chunk) <= per_row), None)
-            if row is None:
+        for chunk in chunks(fam):
+            w = sum(span[i] for i in chunk)
+            k = next((k for k, u in enumerate(used) if u + w <= per_row), None)
+            if k is None:
                 rows.append(list(chunk))
+                used.append(w)
             else:
-                row += chunk
+                rows[k] += chunk
+                used[k] += w
     return rows

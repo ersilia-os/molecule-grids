@@ -21,11 +21,10 @@ from molecule_grids import FORMATS, TooManyMolecules, draw_grid, read_molecules
 @click.option("--frame/--no-frame", default=True, show_default=True, help="Outline the whole figure.")
 @click.option(
     "--squeeze",
-    type=click.Choice(["grid", "rows", "free"]),
-    is_flag=False,
-    flag_value="grid",
-    default=None,
-    help="Reorder and turn molecules to fill the figure [default mode: grid].",
+    type=click.Choice(["rows", "grid", "free", "off"]),
+    default="rows",
+    show_default=True,
+    help="Reorder and turn molecules to fill the figure; 'off' keeps square cells in input order.",
 )
 def draw(input, output, fmt, width, size, number, group, frame, squeeze):
     """Draw a grid from INPUT (.smi/.txt with 'SMILES name' lines, or .csv with a smiles column)."""
@@ -42,7 +41,7 @@ def draw(input, output, fmt, width, size, number, group, frame, squeeze):
             number=number,
             group=group,
             frame=frame,
-            squeeze=squeeze or False,
+            squeeze=False if squeeze == "off" else squeeze,
         )
         grid.save(output)
     except (TooManyMolecules, ValueError, OSError) as e:

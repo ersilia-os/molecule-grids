@@ -26,7 +26,8 @@ def test_width_follows_format(fmt, full):
 def test_size_presets(fmt, bond):
     for size, factor in (("small", 0.7), ("medium", 1.0), ("large", 1.4)):
         assert draw_grid(SMILES, format=fmt, size=size).bond_pt == pytest.approx(bond * factor)
-    assert draw_grid(SMILES, format=fmt, size="small").columns > draw_grid(SMILES, format=fmt, size="large").columns
+    small, large = (draw_grid(SMILES, format=fmt, size=s, squeeze=False) for s in ("small", "large"))
+    assert small.columns > large.columns
     tiny = draw_grid(SMILES, format=fmt, width=0.1, size="large")  # not even one column fits: shrunk
     assert tiny.bond_pt < bond * 1.4 and tiny.columns == 1
     with pytest.raises(ValueError, match="size"):
@@ -69,11 +70,11 @@ def ink_points(svg):
 
 @pytest.mark.parametrize("mode", [True, "rows", "free"])
 def test_squeeze(mode):
-    square = draw_grid(SMILES, NAMES, format="print")
+    square = draw_grid(SMILES, NAMES, format="print", squeeze=False)
     tight = draw_grid(SMILES, NAMES, format="print", squeeze=mode, number=True)
     assert tight.bond_pt == square.bond_pt
-    assert tight.width_in <= square.width_in + 1e-6
-    assert tight.width_in * tight.height_in < square.width_in * square.height_in
+    assert tight.width_mm == pytest.approx(square.width_mm)  # the width never changes
+    assert tight.height_mm < square.height_mm
     assert sorted(tight.order) == list(range(len(SMILES)))
     assert [tight.names[i] for i in tight.order] == [str(k + 1) for k in range(len(SMILES))]
     inks = ink_points(tight.svg)
