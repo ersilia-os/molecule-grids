@@ -187,12 +187,6 @@ with st.sidebar:
         help="70, 100 or 140 % of the standard bond: 14.4 pt in print (ACS) and 20 pt on slides at Medium. "
         "Bigger molecules mean fewer columns.",
     )
-    number = st.toggle("Number compounds 1, 2, 3…", help="Replaces names with bold numbers in input order.")
-    group = st.toggle(
-        "Group by scaffold",
-        value=False,
-        help="Keeps analogues with the same scaffold together, in the same orientation.",
-    )
     squeeze = st.segmented_control(
         "Squeeze",
         [False, "grid", "rows", "free"],
@@ -204,7 +198,17 @@ with st.sidebar:
         "gets smaller. Grid: aligned columns fitted to their molecules. Rows: rows flow like text. "
         "Free: molecules interlock by their outlines. Numbers follow the new order.",
     )
-    frame = st.toggle("Frame", value=False, help="A thin black outline around the whole figure.")
+    group = st.toggle(
+        "Group by scaffold",
+        value=False,
+        disabled=bool(squeeze),
+        help="Keeps analogues with the same scaffold together. Square cells only: squeezing places "
+        "molecules itself. Analogues share one orientation either way.",
+    )
+    number = st.toggle("Number compounds 1, 2, 3…", help="Replaces names with bold numbers in reading order.")
+    frame = st.toggle(
+        "Frame", value=True, help="A thin outline around the whole figure: plum on slides, black in print."
+    )
 
     st.space("large")
     st.caption(

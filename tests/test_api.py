@@ -53,8 +53,9 @@ def test_capacity_and_gif(tmp_path):
 
 
 def test_frame():
-    assert "stroke='#000'" not in draw_grid(["CCO"]).svg
-    assert "stroke='#000'" in draw_grid(["CCO"], frame=True).svg
+    assert "stroke='#50285A'" in draw_grid(["CCO"]).svg  # on by default; plum on slides
+    assert "stroke='#000000'" in draw_grid(["CCO"], format="print").svg  # black in print
+    assert "<rect x=" not in draw_grid(["CCO"], frame=False).svg
 
 
 def ink_points(svg):

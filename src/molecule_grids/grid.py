@@ -17,6 +17,7 @@ from molecule_grids.utils.logging import logger
 COMPOUND_NUMBER = re.compile(r"^\d+[a-z]{0,2}$")
 
 MAX_MOLECULES = 100  # per figure; more are split into GIF frames
+FRAME_COLOR = {"print": "#000000", "slide": "#50285A"}  # black for journals, Ersilia plum on slides
 SQUEEZE = {False: None, None: None, True: "grid", "grid": "grid", "rows": "rows", "free": "free"}
 
 
@@ -148,7 +149,7 @@ def draw_grid(
     size="medium",
     number=False,
     group=False,
-    frame=False,
+    frame=True,
     squeeze=False,
 ):
     """Draw molecules as a grid of square cells, or squeezed to fill the figure.
@@ -179,7 +180,8 @@ def draw_grid(
         Place analogues that share a scaffold side by side. They share one orientation
         regardless. Ignored when squeezing.
     frame : bool
-        Draw a thin black outline around the whole figure, in the format's bond line width.
+        Draw a thin outline around the whole figure, in the format's bond line width: black
+        in print, Ersilia plum (#50285A) on slides. On by default.
     squeeze : bool or {"grid", "rows", "free"}
         Drop the square cells and reorder (and turn by quarter turns) molecules to fill the
         figure, at the same bond length; the figure comes out smaller than ``width``.
@@ -257,7 +259,7 @@ def draw_grid(
         for k, i in enumerate(order):
             names[i] = str(k + 1)
     line = acs.BOND * (acs.LINE_RATIO if fmt.name == "print" else slide.LINE_RATIO)
-    pages = _render(geo, layouts, get, names, bold, line if frame else None)
+    pages = _render(geo, layouts, get, names, bold, (line, FRAME_COLOR[fmt.name]) if frame else None)
     used = None if mode == "free" else max(c for *_, c in layouts)
     if len(layouts) > 1:  # what the first page holds
         capacity = len(layouts[0][2])
@@ -391,13 +393,14 @@ def _free_layout(geo, get, idx, columns, capw, group):
 
 
 def _render(geo, layouts, get, names, bold, frame=None):
-    """Write one SVG per layout on a shared canvas; ``frame`` is the outline width, or None."""
+    """Write one SVG per layout on a shared canvas; ``frame`` is ``(line width, colour)`` or None."""
     W, H = max(lay[0] for lay in layouts), max(lay[1] for lay in layouts)
     outline = ""
     if frame:  # stroke drawn inside the canvas edge
+        lw, color = frame
         outline = (
-            f"\n<rect x='{frame / 2:.2f}' y='{frame / 2:.2f}' width='{W - frame:.2f}' height='{H - frame:.2f}' "
-            f"fill='none' stroke='#000' stroke-width='{frame:.2f}'/>"
+            f"\n<rect x='{lw / 2:.2f}' y='{lw / 2:.2f}' width='{W - lw:.2f}' height='{H - lw:.2f}' "
+            f"fill='none' stroke='{color}' stroke-width='{lw:.2f}'/>"
         )
     pages = []
     for _, _, place, _ in layouts:

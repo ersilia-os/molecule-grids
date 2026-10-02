@@ -18,7 +18,7 @@ from molecule_grids import FORMATS, TooManyMolecules, draw_grid, read_molecules
 )
 @click.option("--number", is_flag=True, help="Caption with bold compound numbers 1, 2, 3...")
 @click.option("--group", is_flag=True, help="Place analogues sharing a scaffold side by side.")
-@click.option("--frame", is_flag=True, help="Outline the whole figure.")
+@click.option("--frame/--no-frame", default=True, show_default=True, help="Outline the whole figure.")
 @click.option(
     "--squeeze",
     type=click.Choice(["grid", "rows", "free"]),
