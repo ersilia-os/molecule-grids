@@ -34,7 +34,7 @@ def test_size_presets(fmt, bond):
 
 
 def test_save_types(tmp_path):
-    grid = draw_grid(SMILES, NAMES, number=True)
+    grid = draw_grid(SMILES, NAMES, format="print", number=True)
     for ext in ("svg", "png", "pdf"):
         assert grid.save(tmp_path / f"grid.{ext}").stat().st_size > 0
 
@@ -81,6 +81,19 @@ def test_squeeze(mode):
     assert gap > 0.5 * 26  # inks never closer than half a bond (26 drawing units)
     again = draw_grid(SMILES, NAMES, format="print", squeeze=mode, number=True)
     assert again.svg == tight.svg  # deterministic
+
+
+@pytest.mark.parametrize("mode", [False, "grid", "rows", "free"])
+def test_slide_height_cap(tmp_path, mode):
+    pool = [s for fam in FAMILIES for s, _ in fam] + [s for s, _ in SINGLES]
+    grid = draw_grid(pool, format="slide", squeeze=mode)
+    assert len(grid.pages) > 1
+    heights = [float(re.search(r"height='([\d.]+)pt'", p).group(1)) / 72 for p in grid.pages]
+    assert max(heights) <= 13 * 9 / 16 + 0.01
+    assert sorted(grid.order) == list(range(len(pool)))
+    with pytest.raises(TooManyMolecules):
+        grid.save(tmp_path / "grid.svg")
+    assert draw_grid(pool, format="print", squeeze=mode).pages[1:] == []  # print grows instead
 
 
 def test_errors():

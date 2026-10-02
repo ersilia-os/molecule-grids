@@ -41,7 +41,8 @@ class Grid:
         Number of columns, set by the width (when squeezing, possibly fewer; None for
         ``squeeze="free"``).
     capacity : int
-        Most molecules in one figure (``MAX_MOLECULES``, rounded down to whole rows).
+        Most molecules in one figure: up to ``MAX_MOLECULES`` (100), fewer when a slide's
+        height (7.31 in, 16:9) is reached.
     bond_pt : float
         Bond length in pt when the figure is placed at 100 %.
     width_in, height_in : float
@@ -100,7 +101,7 @@ class Grid:
         Parameters
         ----------
         path : str or Path
-            ``.svg``, ``.png``, ``.pdf`` or ``.gif``. A GIF has one frame per ``capacity`` molecules and is the
+            ``.svg``, ``.png``, ``.pdf`` or ``.gif``. A GIF has one frame per page (``capacity`` molecules) and is the
             only type that accepts more molecules than ``capacity``.
 
         Returns
@@ -225,6 +226,9 @@ def draw_grid(
         )
     columns = geo.columns
     max_rows = max(1, MAX_MOLECULES // columns)
+    max_h = fmt.max_height_in * sizing.PT_PER_IN / geo.scale if fmt.max_height_in else float("inf")
+    if fmt.max_height_in:  # rows that fit the page height
+        max_rows = max(1, min(max_rows, int((max_h - geo.gap) // geo.row_pitch)))
     variants = {(i, 0): d for i, d in enumerate(drawn)}
 
     def get(i, r):
@@ -240,10 +244,8 @@ def draw_grid(
         group = {i: idxs[0] for key, idxs in buckets.items() if len(idxs) > 1 and key != "(acyclic)" for i in idxs}
         group = [group.get(i, i) for i in range(len(mols))]
         capw = [text_width(n, geo.caption, b) if n else 0.0 for n, b in zip(names, bold)]
-        size = columns * max_rows
-        chunks = [list(range(k, min(k + size, len(mols)))) for k in range(0, len(mols), size)]
         squeezer = {"grid": _grid_layout, "rows": _rows_layout, "free": _free_layout}[mode]
-        layouts = [squeezer(geo, get, idx, columns, capw, group) for idx in chunks]
+        layouts = _paginate(len(mols), max_h, lambda idx: squeezer(geo, get, idx, columns, capw, group))
     else:
         rows = arrange(buckets, len(mols), columns, group)
         layouts = [_square_layout(geo, drawn, rows[p : p + max_rows]) for p in range(0, len(rows), max_rows)]
@@ -257,7 +259,32 @@ def draw_grid(
     line = acs.BOND * (acs.LINE_RATIO if fmt.name == "print" else slide.LINE_RATIO)
     pages = _render(geo, layouts, get, names, bold, line if frame else None)
     used = None if mode == "free" else max(c for *_, c in layouts)
-    return Grid(fmt, names, order, geo, used, columns * max_rows, pages)
+    if len(layouts) > 1:  # what the first page holds
+        capacity = len(layouts[0][2])
+    else:  # squeezed pages may hold more than the square grid
+        capacity = max(columns * max_rows, len(mols)) if mode else columns * max_rows
+    return Grid(fmt, names, order, geo, used, capacity, pages)
+
+
+def _paginate(n, max_h, build):
+    """Split molecules 0..n-1, in input order, into squeezed pages no taller than ``max_h``.
+
+    Each page takes as many molecules as fit (at most ``MAX_MOLECULES``), found by bisection.
+    """
+    layouts, start = [], 0
+    while start < n:
+        k = min(n - start, MAX_MOLECULES)
+        lay = build(list(range(start, start + k)))
+        if lay[1] > max_h:
+            lo, hi, lay_lo = 1, k - 1, build([start])  # largest k that fits (lay_lo is its layout)
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                trial = build(list(range(start, start + mid)))
+                lo, hi, lay_lo = (mid, hi, trial) if trial[1] <= max_h else (lo, mid - 1, lay_lo)
+            k, lay = lo, lay_lo
+        layouts.append(lay)
+        start += k
+    return layouts
 
 
 # Layouts return (W, H, [(i, r, cx, cy, baseline)], columns): figure size, and per molecule its

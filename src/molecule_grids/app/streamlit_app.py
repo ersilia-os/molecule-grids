@@ -238,7 +238,7 @@ if len(pages) > 1:
     with st.container(key="callout-pages"):
         st.caption(
             f":orange[:material/warning:] Showing the first {info['capacity']} of {len(smiles)} molecules. "
-            f"Download the GIF for all of them ({len(pages)} frames)."
+            f"Download the GIF for all of them ({len(pages)} frames), or try a smaller size or Squeeze."
         )
 
 svg = pages[0]

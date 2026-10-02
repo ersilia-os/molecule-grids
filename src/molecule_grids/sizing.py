@@ -4,7 +4,7 @@ A figure's width is a fraction of the format's base width (stylia's ``SIZE``): 7
 for print (Nature two-column) and 13 in for slides. Molecules are drawn at a fixed size:
 at ``size="medium"`` the bond is 14.4 pt in print (ACS) and 20 pt on slides. The width holds as
 many square cells as fit the largest molecule at that size, one molecule per cell, and the
-height follows from the number of rows.
+height follows from the number of rows, up to a 16:9 slide (7.31 in) for slides.
 """
 
 from dataclasses import dataclass
@@ -27,6 +27,8 @@ class Format:
         Full figure width in inches (stylia ``SIZE``).
     bond_pt : float
         Bond length at ``size="medium"``, in pt.
+    max_height_in : float or None
+        Tallest figure, in inches (a 16:9 slide); taller grids are split into pages.
     png_dpi : int
         Resolution of PNG and GIF exports.
     """
@@ -34,12 +36,13 @@ class Format:
     name: str
     size_in: float
     bond_pt: float
+    max_height_in: float | None
     png_dpi: int
 
 
 FORMATS = {
-    "print": Format("print", 7.09, acs.ACS["bond"], 300),  # Nature two-column width; ACS bond
-    "slide": Format("slide", 13.0, 20.0, 150),  # wide slide; labels about 14 pt
+    "print": Format("print", 7.09, acs.ACS["bond"], None, 300),  # Nature two-column width; ACS bond
+    "slide": Format("slide", 13.0, 20.0, 13.0 * 9 / 16, 150),  # 16:9 slide; labels about 14 pt
 }
 
 GAP = 1.6  # gap between cells and page margin, in bond lengths

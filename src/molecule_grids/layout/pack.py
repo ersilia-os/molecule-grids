@@ -83,7 +83,7 @@ def grid_pack(idx, columns, dims, capw, group, gap, strip):
 
     def neighbour(state, rng):
         C, cells, rot = state
-        if rng.random() < 0.2:
+        if rng.random() < 0.2 or len(cells) < 2:
             return C, cells, _turn_group(rot, groups, rng)
         a, b = rng.sample(range(len(cells)), 2)
         if cells[a] is None and cells[b] is None:
