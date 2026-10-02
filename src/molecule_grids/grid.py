@@ -16,7 +16,6 @@ from molecule_grids.utils.logging import logger
 # A caption that is only a compound number (1, 2, 12, 3a, 10b ...) is set in bold (ACS style).
 COMPOUND_NUMBER = re.compile(r"^\d+[a-z]{0,2}$")
 
-MAX_COLUMNS = 30
 MAX_MOLECULES = 100  # per figure; more are split into GIF frames
 SQUEEZE = {False: None, None: None, True: "grid", "grid": "grid", "rows": "rows", "free": "free"}
 
@@ -145,6 +144,7 @@ def draw_grid(
     names=None,
     format="slide",
     width=1.0,
+    zoom=1.0,
     number=False,
     group=False,
     frame=False,
@@ -153,9 +153,9 @@ def draw_grid(
     """Draw molecules as a grid of square cells, or squeezed to fill the figure.
 
     The figure width is ``width`` times the format's full width (7.09 in for print,
-    13 in for slides), as in stylia. All molecules share one bond length: the largest
-    at which the biggest molecule fits its cell, never above 14.4 pt in print (ACS)
-    or 20 pt on slides.
+    13 in for slides), as in stylia. Molecules are drawn at a fixed size, 14.4 pt bonds
+    in print (ACS) and 20 pt on slides, times ``zoom``; the width holds as many columns
+    as fit at that size.
 
     Parameters
     ----------
@@ -166,9 +166,11 @@ def draw_grid(
     format : {"slide", "print"}
         ``"slide"``: RDKit colours. ``"print"``: ChemDraw ACS Document 1996 style.
     width : float
-        Fraction of the format's full width, in (0, 1]. It sets the number of columns:
-        about one per 1.75 in (print) or 1.9 in (slide), no more than keep atom labels
-        legible. Rows are added as needed.
+        Fraction of the format's full width, in (0, 1]. Together with ``zoom`` it sets the
+        number of columns. Rows are added as needed.
+    zoom : float
+        Molecule size, in [0.5, 2]; 1 is 100 %. If the largest molecule would not fit the
+        width even in one column, it is shrunk to fit (see ``Grid.bond_pt``).
     number : bool
         Replace captions with bold compound numbers 1, 2, 3... in reading order.
     group : bool
@@ -191,11 +193,14 @@ def draw_grid(
     Raises
     ------
     ValueError
-        On invalid SMILES or a width outside (0, 1].
+        On invalid SMILES, or a width or zoom out of range.
     """
     fmt = sizing.get_format(format)
     if not 0 < width <= 1:
         raise ValueError(f"width is a fraction of the full {fmt.name} width and must be in (0, 1], not {width}")
+    lo, hi = sizing.ZOOM_RANGE
+    if not lo <= zoom <= hi:
+        raise ValueError(f"zoom must be in [{lo}, {hi}] (1 is 100 %), not {zoom}")
     molecules = list(molecules)
     if not molecules:
         raise ValueError("no molecules to draw")
@@ -209,18 +214,15 @@ def draw_grid(
     drawn = [draw_one(m, fmt.name) for m in mols]
     bold = [bool(COMPOUND_NUMBER.match(n)) for n in names]
     ink = max(max(d[3], d[4]) for d in drawn)
-    ratio = acs.LABEL_RATIO if fmt.name == "print" else slide.CAPTION_RATIO
-
-    def caption_widths(size):
-        return max(text_width(n, size, b) for n, b in zip(names, bold))
-
-    def solve(c):
-        return sizing.solve(fmt, width, c, ink, caption_widths, ratio)
-
-    max_columns = next((c for c in range(MAX_COLUMNS, 0, -1) if solve(c).bond_pt >= fmt.min_bond_pt), 1)  # legible
-    target = round(width * fmt.size_in / fmt.target_cell_in)
-    columns = max(1, min(target, max_columns, len(molecules)))
-    geo = solve(columns)
+    caption = (acs.LABEL_RATIO if fmt.name == "print" else slide.CAPTION_RATIO) * acs.BOND
+    needed = max(ink, max(text_width(n, caption, b) for n, b in zip(names, bold)))
+    geo = sizing.solve(fmt, width, zoom, needed, caption)
+    if geo.bond_pt < fmt.bond_pt * zoom - 1e-6:
+        logger.warning(
+            f"The largest molecule does not fit width={width} at zoom={zoom}; "
+            f"drawn at {geo.bond_pt / fmt.bond_pt:.0%} instead"
+        )
+    columns = geo.columns
     max_rows = max(1, MAX_MOLECULES // columns)
     variants = {(i, 0): d for i, d in enumerate(drawn)}
 

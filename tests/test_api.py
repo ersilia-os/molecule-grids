@@ -22,9 +22,13 @@ def test_width_follows_format(fmt, full):
         assert width_in(grid.pages[0]) == pytest.approx(w * full, abs=0.01)
 
 
-@pytest.mark.parametrize("fmt, cap", [("print", 14.4), ("slide", 20.0)])
-def test_bond_capped(fmt, cap):
-    assert draw_grid(["CCO"], format=fmt).bond_pt == pytest.approx(cap)
+@pytest.mark.parametrize("fmt, bond", [("print", 14.4), ("slide", 20.0)])
+def test_zoom_sets_size(fmt, bond):
+    for zoom in (0.5, 1.0, 2.0):
+        assert draw_grid(SMILES, format=fmt, zoom=zoom).bond_pt == pytest.approx(bond * zoom)
+    assert draw_grid(SMILES, format=fmt, zoom=0.5).columns > draw_grid(SMILES, format=fmt, zoom=2).columns
+    tiny = draw_grid(SMILES, format=fmt, width=0.1, zoom=2)  # does not fit even one column: shrunk
+    assert tiny.bond_pt < bond * 2 and tiny.columns == 1
 
 
 def test_save_types(tmp_path):

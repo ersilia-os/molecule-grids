@@ -1,11 +1,10 @@
 """Figure sizing, harmonised with stylia.
 
 A figure's width is a fraction of the format's base width (stylia's ``SIZE``): 7.09 in
-for print (Nature two-column) and 13 in for slides. The width is split into square cells,
-one per molecule, so the height follows from the number of rows. All molecules share one
-bond length: the largest at which the biggest molecule fits its cell, capped at
-14.4 pt in print (ACS) and 20 pt on slides. Legibility sets a floor on the bond length (atom labels no smaller than
-stylia's ``FONTSIZE_SMALL``), which in turn bounds the columns. Rows grow as needed.
+for print (Nature two-column) and 13 in for slides. Molecules are drawn at a fixed size:
+at ``zoom=1`` the bond is 14.4 pt in print (ACS) and 20 pt on slides. The width holds as
+many square cells as fit the largest molecule at that size, one molecule per cell, and the
+height follows from the number of rows.
 """
 
 from dataclasses import dataclass
@@ -13,6 +12,7 @@ from dataclasses import dataclass
 from molecule_grids.depict import acs
 
 PT_PER_IN = 72.0
+ZOOM_RANGE = (0.5, 2.0)
 
 
 @dataclass(frozen=True)
@@ -25,34 +25,21 @@ class Format:
         ``"print"`` or ``"slide"``.
     size_in : float
         Full figure width in inches (stylia ``SIZE``).
-    min_label_pt : float
-        Smallest atom label and caption, in pt (stylia ``FONTSIZE_SMALL``).
-    max_bond_pt : float
-        Largest bond length, in pt (ACS 14.4 pt for print; 20 pt for slides).
-    target_cell_in : float
-        Cell size used to pick a default number of columns, in inches.
+    bond_pt : float
+        Bond length at ``zoom=1``, in pt.
     png_dpi : int
         Resolution of PNG and GIF exports.
     """
 
     name: str
     size_in: float
-    min_label_pt: float
-    max_bond_pt: float
-    target_cell_in: float
+    bond_pt: float
     png_dpi: int
-
-    @property
-    def min_bond_pt(self):
-        """Shortest legible bond: atom labels are ``LABEL_RATIO`` of the bond length."""
-        return self.min_label_pt / acs.LABEL_RATIO
 
 
 FORMATS = {
-    # Nature two-column width.
-    "print": Format("print", 7.09, 5.0, acs.ACS["bond"], 1.75, 300),
-    # Wide slide.
-    "slide": Format("slide", 13.0, 8.0, 20.0, 1.9, 150),
+    "print": Format("print", 7.09, acs.ACS["bond"], 300),  # Nature two-column width; ACS bond
+    "slide": Format("slide", 13.0, 20.0, 150),  # wide slide; labels about 14 pt
 }
 
 GAP = 1.6  # gap between cells and page margin, in bond lengths
@@ -97,8 +84,8 @@ class Geometry:
         return 2 * self.gap + rows * self.row_pitch - self.gap
 
 
-def solve(fmt, width, columns, ink, caption_widths, caption_ratio):
-    """Solve the grid geometry for a given number of columns.
+def solve(fmt, width, zoom, needed, caption):
+    """Solve the grid geometry at a fixed molecule size.
 
     Parameters
     ----------
@@ -106,27 +93,24 @@ def solve(fmt, width, columns, ink, caption_widths, caption_ratio):
         Output format.
     width : float
         Figure width as a fraction of ``fmt.size_in``.
-    columns : int
-        Number of columns.
-    ink : float
-        Largest ink extent (width or height) over all molecules, in drawing units.
-    caption_widths : callable
-        Maps a caption font size to the widest caption, in drawing units.
-    caption_ratio : float
-        Caption font size relative to the bond length.
+    zoom : float
+        Molecule size relative to ``fmt.bond_pt``.
+    needed : float
+        Smallest cell side that fits every molecule and caption, in drawing units.
+    caption : float
+        Caption font size, in drawing units.
 
     Returns
     -------
     Geometry
+        As many columns as fit; cells widen to fill the width exactly. If not even one
+        cell fits, the scale is reduced until it does (check ``bond_pt``).
     """
     gap = GAP * acs.BOND
     width_pt = width * fmt.size_in * PT_PER_IN
-    caption = caption_ratio * acs.BOND
-    for _ in range(4):  # caption size and cell size depend on each other; converges fast
-        cell = max(ink, caption_widths(caption))
-        scale = width_pt / (2 * gap + columns * cell + (columns - 1) * gap)
-        scale = min(scale, fmt.max_bond_pt / acs.BOND)
-        caption = max(caption_ratio * acs.BOND, fmt.min_label_pt / scale)
+    scale = fmt.bond_pt * zoom / acs.BOND
+    scale = min(scale, width_pt / (2 * gap + needed))  # one cell must fit
     total = width_pt / scale
-    cell = (total - 2 * gap - (columns - 1) * gap) / columns  # fill the width exactly
+    columns = max(1, int((total - gap) // (needed + gap)))
+    cell = (total - 2 * gap - (columns - 1) * gap) / columns
     return Geometry(columns, cell, caption, scale, total)

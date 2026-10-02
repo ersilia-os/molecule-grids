@@ -13,7 +13,7 @@ PNG, PDF and GIF export need the cairo library (`brew install cairo` or `apt ins
 ```python
 from molecule_grids import draw_grid, read_molecules
 
-grid = draw_grid(["CCO", "c1ccccc1O"], names=["Ethanol", "Phenol"], format="print", width=0.5)
+grid = draw_grid(["CCO", "c1ccccc1O"], names=["Ethanol", "Phenol"], format="print", width=0.5, zoom=1.2)
 grid.save("grid.svg")  # .svg, .png, .pdf or .gif
 
 smiles, names = read_molecules("hits.csv")  # .csv with a smiles column, or .smi lines "SMILES name"
@@ -26,9 +26,8 @@ draw_grid(smiles, names, format="slide", group=True, number=True, frame=True).sa
 
 Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a fraction of the full format width (7.09 in for print, 13 in for slides).
 
-- Each molecule sits in a square cell, so the height follows from the number of rows.
-- All molecules share one bond length, set so the largest molecule fits its cell (at most 14.4 pt in print, 20 pt on slides).
-- The width sets the columns: about one per 1.75 in (print) or 1.9 in (slide), fewer if atom labels would drop below 5 pt (print) or 8 pt (slide). Rows are added as needed.
+- Molecules have a fixed size: 14.4 pt bonds in print (ACS) and 20 pt on slides at `zoom=1`. `zoom` scales them from 0.5 to 2.
+- Each molecule sits in a square cell. The width holds as many columns as fit; rows are added as needed.
 - `squeeze` drops the square cells and reorders (and turns) molecules to fill the figure at the same bond length: `"grid"` (aligned, also `True`), `"rows"` (flowing like text) or `"free"` (interlocking outlines).
 - A figure holds up to 100 molecules; more raise `TooManyMolecules`. Save as `.gif` to get one frame per 100.
 
@@ -36,7 +35,7 @@ Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a fracti
 
 | Command | Description |
 |---|---|
-| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `-w`, `--number`, `--group`, `--frame`, `--squeeze [grid\|rows\|free]`) |
+| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `-w`, `-z`, `--number`, `--group`, `--frame`, `--squeeze [grid\|rows\|free]`) |
 | `molecule-grids examples -o FILE` | Write random global-health drugs as a `.smi` file |
 | `molecule-grids app` | Launch the Streamlit app |
 

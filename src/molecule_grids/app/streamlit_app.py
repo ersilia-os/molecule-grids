@@ -22,13 +22,14 @@ EXAMPLE = examples.as_text(examples.DEFAULT)
 
 
 @st.cache_data(show_spinner="Drawing…")
-def figure(smiles, names, fmt, width, number, group, frame, squeeze):
+def figure(smiles, names, fmt, width, zoom, number, group, frame, squeeze):
     """Draw the grid; returns (pages, summary)."""
     grid = draw_grid(
         smiles,
         names,
         format=fmt,
         width=width,
+        zoom=zoom,
         number=number,
         group=group,
         frame=frame,
@@ -162,8 +163,8 @@ with st.sidebar:
         width="stretch",
         format_func=lambda m: {"slide": ":material/desktop_windows: Slide", "print": ":material/print: Print"}[m],
         help="Slide: RDKit colours, 13 in wide at full width. "
-        "Print: ChemDraw ACS 1996 style, 7.09 in (two journal columns) at full width, bonds up to "
-        "14.4 pt; insert the SVG at 100 % in Word or Illustrator to keep the dimensions.",
+        "Print: ChemDraw ACS 1996 style, 7.09 in (two journal columns) at full width, 14.4 pt bonds "
+        "at 100 %; insert the SVG at 100 % in Word or Illustrator to keep the dimensions.",
     )
     width = st.slider(
         "Width",
@@ -174,7 +175,17 @@ with st.sidebar:
         format="%.2f",
         help=f"Fraction of the full width: {FORMATS['slide'].size_in:g} in for slides, "
         f"{FORMATS['print'].size_in:g} in for print (as in stylia). "
-        "The width sets the number of columns; each molecule sits in a square cell, so the height follows.",
+        "As many columns as fit; each molecule sits in a square cell, so the height follows.",
+    )
+    zoom = st.slider(
+        "Magnifier",
+        50,
+        200,
+        100,
+        10,
+        format="%d%%",
+        help="Molecule size. 100 % is a 14.4 pt bond in print (ACS) and 20 pt on slides. "
+        "Bigger molecules mean fewer columns.",
     )
     number = st.toggle("Number compounds 1, 2, 3…", help="Replaces names with bold numbers in input order.")
     group = st.toggle(
@@ -222,7 +233,7 @@ if not smiles:
         )
     st.stop()
 
-pages, info = figure(tuple(smiles), tuple(names), mode, width, number, group, frame, squeeze)
+pages, info = figure(tuple(smiles), tuple(names), mode, width, zoom / 100, number, group, frame, squeeze)
 if len(pages) > 1:
     with st.container(key="callout-pages"):
         st.caption(
