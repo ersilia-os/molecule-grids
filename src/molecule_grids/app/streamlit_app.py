@@ -25,7 +25,7 @@ EXAMPLE = examples.as_text(examples.DEFAULT)
 
 
 @st.cache_data(show_spinner="Drawing…")
-def figure(smiles, names, fmt, style, width, size, number, group, frame, squeeze):
+def figure(smiles, names, fmt, style, width, max_height, size, number, group, frame, squeeze):
     """Draw the grid; returns (pages, summary)."""
     grid = draw_grid(
         smiles,
@@ -33,6 +33,7 @@ def figure(smiles, names, fmt, style, width, size, number, group, frame, squeeze
         format=fmt,
         style=style,
         width=width,
+        max_height=max_height,
         size=size,
         number=number,
         group=group,
@@ -206,6 +207,19 @@ with st.sidebar:
         "the height follows, up to one page.",
     )
     width = share / 100
+    page_mm = FORMATS[mode].max_height_in * 25.4
+    tall = st.slider(
+        f"Maximum height · {st.session_state.get('tall', 100) / 100 * page_mm:.0f} mm",
+        25,
+        100,
+        100,
+        5,
+        key="tall",
+        format="%d%%",
+        help=f"Tallest the figure may be, as a proportion of the page: {FORMATS['print'].max_height_in * 25.4:.0f} mm "
+        f"in print and {FORMATS['slide'].max_height_in * 25.4:.0f} mm on slides (16:9). Lower it to leave room "
+        "for a title or text. Molecules that do not fit go to the next page; nothing is cut.",
+    )
     size = st.segmented_control(
         "Molecule size",
         ["small", "medium", "large"],
@@ -267,7 +281,7 @@ if not smiles:
         )
     st.stop()
 
-pages, info = figure(tuple(smiles), tuple(names), mode, style, width, size, number, group, frame, squeeze)
+pages, info = figure(tuple(smiles), tuple(names), mode, style, width, tall / 100, size, number, group, frame, squeeze)
 n_pages = len(pages)
 if n_pages > 1:
     with st.container(key="callout-pages"):

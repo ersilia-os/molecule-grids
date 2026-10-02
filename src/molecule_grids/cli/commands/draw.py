@@ -30,6 +30,9 @@ from molecule_grids import FORMATS, draw_grid, read_molecules
 )
 @click.option("-w", "--width", type=float, default=1.0, show_default=True, help="Fraction of the full format width.")
 @click.option(
+    "--max-height", type=float, default=1.0, show_default=True, help="Tallest figure, as a fraction of the page."
+)
+@click.option(
     "-s",
     "--size",
     type=click.Choice(["small", "medium", "large"]),
@@ -47,7 +50,7 @@ from molecule_grids import FORMATS, draw_grid, read_molecules
     show_default=True,
     help="Reorder and turn molecules to fill the figure; 'off' keeps square cells in input order.",
 )
-def draw(input, output, fmt, style, width, size, number, group, frame, squeeze):
+def draw(input, output, fmt, style, width, max_height, size, number, group, frame, squeeze):
     """Draw a grid from INPUT (.smi/.txt with 'SMILES name' lines, or .csv with a smiles column)."""
     smiles, names = read_molecules(input)
     if not smiles:
@@ -59,6 +62,7 @@ def draw(input, output, fmt, style, width, size, number, group, frame, squeeze):
             format=fmt,
             style=style,
             width=width,
+            max_height=max_height,
             size=size,
             number=number,
             group=group,

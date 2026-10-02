@@ -152,6 +152,7 @@ def draw_grid(
     format="slide",
     style="medicinal",
     width=1.0,
+    max_height=1.0,
     size="medium",
     number=False,
     group=False,
@@ -179,7 +180,11 @@ def draw_grid(
         1996 style in black and white; ``"computational"``, RDKit colours.
     width : float
         Fraction of the format's full width, in (0, 1]. Together with ``size`` it sets the
-        number of columns. Rows are added as needed.
+        number of columns. Rows are added as needed. If all molecules fit in one row, the
+        figure is only as wide as they need.
+    max_height : float
+        Tallest figure, as a fraction of the page height (247 mm in print, 186 mm on slides),
+        in (0, 1]. Molecules that do not fit go to the next page; nothing is cut.
     size : {"small", "medium", "large"}
         Molecule size: 70, 100 or 140 % of the format's bond length (print 10, 14.4 or 20 pt;
         slide 14, 20 or 28 pt). If the largest molecule would not fit the width even in one
@@ -206,11 +211,13 @@ def draw_grid(
     Raises
     ------
     ValueError
-        On invalid SMILES, a width out of range, or an unknown size.
+        On invalid SMILES, a width or height out of range, or an unknown size or style.
     """
     fmt = sizing.get_format(format)
     if not 0 < width <= 1:
         raise ValueError(f"width is a fraction of the full {fmt.name} width and must be in (0, 1], not {width}")
+    if not 0 < max_height <= 1:
+        raise ValueError(f"max_height is a fraction of the page height and must be in (0, 1], not {max_height}")
     if style not in STYLES:
         raise ValueError(f"style must be one of {list(STYLES)}, not {style!r}")
     if size not in sizing.SIZES:
@@ -240,7 +247,7 @@ def draw_grid(
             f"drawn at {geo.bond_pt:.1f} pt bonds instead of {fmt.bond_pt * factor:.1f}"
         )
     columns = geo.columns
-    max_h = fmt.max_height_in * sizing.PT_PER_IN / geo.scale  # page height, in drawing units
+    max_h = max_height * fmt.max_height_in * sizing.PT_PER_IN / geo.scale  # tallest page, in drawing units
     full_rows = max(1, int((max_h - geo.gap) // (geo.cell + geo.strip + geo.gap)))  # typical rows per page
     variants = {(i, 0): d for i, d in enumerate(drawn)}
 
@@ -253,13 +260,19 @@ def draw_grid(
     mode = SQUEEZE.get(squeeze, "bad") if isinstance(squeeze, (bool, str, type(None))) else "bad"
     if mode == "bad":
         raise ValueError(f"squeeze must be False, True, 'grid', 'rows' or 'free', not {squeeze!r}")
-    if mode:
+    span = [geo.span(w) for w in wide]
+    cells = [s * geo.cell + (s - 1) * geo.gap for s in span]  # square cell width of each molecule
+    slots = wide if mode else cells
+    one_row = geo.gap + sum(w + geo.gap for w in slots) <= geo.width
+    one_row = one_row and geo.gap + max(d[4] for d in drawn) + geo.strip + geo.gap <= max_h
+    if one_row:
+        layouts = [_one_row(geo, drawn, slots)]  # no need for the full width
+    elif mode:
         group = {i: idxs[0] for key, idxs in buckets.items() if len(idxs) > 1 and key != "(acyclic)" for i in idxs}
         group = [group.get(i, i) for i in range(len(mols))]
         squeezer = {"grid": _grid_layout, "rows": _rows_layout, "free": _free_layout}[mode]
         layouts = _paginate(len(mols), max_h, lambda idx: squeezer(geo, get, idx, columns, capw, group))
     else:
-        span = [geo.span(w) for w in wide]
         rows = arrange(buckets, len(mols), columns, group, span)
         layouts = _square_pages(geo, drawn, span, rows, max_h)
     order = [i for _, _, place, _ in layouts for i, *_ in place]
@@ -269,7 +282,7 @@ def draw_grid(
             names[i] = str(k + 1)
     line = acs.BOND * (acs.LINE_RATIO if style == "medicinal" else computational.LINE_RATIO)  # as the bonds
     pages = _render(geo, layouts, get, names, bold, (line, FRAME_COLOR[fmt.name]) if frame else None)
-    used = None if mode == "free" else max(c for *_, c in layouts)
+    used = None if mode == "free" and not one_row else max(c for *_, c in layouts)
     if len(layouts) > 1:  # what the first page holds
         capacity = len(layouts[0][2])
     else:  # estimate for typical molecules; a squeezed page may hold more
@@ -310,12 +323,12 @@ def _square_pages(geo, drawn, span, rows, max_h):
     tall as its tallest molecule.
     """
     W, gap, pitch = geo.width, geo.gap, geo.pitch
-    layouts, place, y, count = [], [], gap, 0
+    layouts, place, y, count, used = [], [], gap, 0, 0
     for r in rows:
         rh = max(drawn[i][4] for i in r)  # each row is as tall as its tallest molecule
         if place and (y + rh + geo.strip + gap > max_h or count + len(r) > MAX_MOLECULES):
-            layouts.append((W, y, place, geo.columns))
-            place, y, count = [], gap, 0
+            layouts.append((W, y, place, used))
+            place, y, count, used = [], gap, 0, 0
         x = (W - sum(span[i] for i in r) * pitch - gap) / 2 + gap  # centre partial rows
         for i in r:
             w = span[i] * pitch - gap  # cell width
@@ -324,8 +337,21 @@ def _square_pages(geo, drawn, span, rows, max_h):
             x += span[i] * pitch
         y += rh + geo.strip + gap
         count += len(r)
-    layouts.append((W, y, place, geo.columns))
+        used = max(used, sum(span[i] for i in r))  # columns actually used
+    layouts.append((W, y, place, used))
     return layouts
+
+
+def _one_row(geo, drawn, slots):
+    """All molecules in one row, in input order, each in a slot ``slots[i]`` wide; the figure
+    is only as wide as the row."""
+    gap = geo.gap
+    rh = max(d[4] for d in drawn)
+    place, x = [], gap
+    for i, w in enumerate(slots):
+        place.append((i, 0, x + w / 2, gap + rh / 2, gap + rh + geo.caption_base))
+        x += w + gap
+    return x, gap + rh + geo.strip + gap, place, len(slots)
 
 
 def _dims(get, idx, turns):

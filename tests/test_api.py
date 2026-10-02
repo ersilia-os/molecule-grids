@@ -108,6 +108,24 @@ def test_page_height_cap(tmp_path, fmt, max_in, mode):
     assert len(grid.save(tmp_path / "grid.svg")) == len(grid.pages)
 
 
+def test_one_row_shrinks_and_columns_are_used_ones():
+    for mode in ("rows", False, "grid", "free"):
+        one = draw_grid(["CC(=O)Oc1ccccc1C(=O)O"], format="slide", squeeze=mode)
+        assert one.width_mm < 100 and one.columns == 1  # not the full 330 mm
+    full = draw_grid(SMILES * 3, format="slide")
+    assert full.width_mm == pytest.approx(330.2, abs=0.5)  # a full row keeps the full width
+
+
+def test_max_height_paginates():
+    pool = [s for fam in FAMILIES for s, _ in fam] + [s for s, _ in SINGLES]
+    tall, short = draw_grid(pool, format="print"), draw_grid(pool, format="print", max_height=0.4)
+    assert len(short.pages) > len(tall.pages)
+    heights_mm = [float(re.search(r"height='([\d.]+)pt'", p).group(1)) * 25.4 / 72 for p in short.pages]
+    assert max(heights_mm) <= 0.4 * 247 + 0.5
+    with pytest.raises(ValueError, match="max_height"):
+        draw_grid(["CCO"], max_height=0)
+
+
 def test_errors():
     with pytest.raises(ValueError, match="invalid SMILES"):
         draw_grid(["CCO", "not-a-smiles"])
