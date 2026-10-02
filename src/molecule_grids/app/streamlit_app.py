@@ -109,7 +109,7 @@ st.html("""
 
   /* The figure card: white surface on the near-white ground, plum-tinted hairline shadow. */
   .st-key-card-figure { background: #FFFFFF; box-shadow: 0 1px 3px rgba(80, 40, 90, .07); }
-  .figure { overflow-x: auto; padding: 0.5rem 0 0.25rem; }
+  .figure { overflow-x: auto; padding: 0.5rem 0 1.25rem; }  /* room under the figure, inside the card */
   .figure img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
 
   /* Callouts: recessed panel, hairline, the hue only on the left edge (never a saturated fill). */
