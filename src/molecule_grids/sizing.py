@@ -59,6 +59,7 @@ class Geometry:
 
     columns: int
     cell: float  # square cell side
+    pitch: float  # column pitch (cell plus its share of the spare width and gaps)
     caption: float  # caption font size
     scale: float  # pt per drawing unit
     width: float  # figure width
@@ -103,8 +104,9 @@ def solve(fmt, width, zoom, needed, caption):
     Returns
     -------
     Geometry
-        As many columns as fit; cells widen to fill the width exactly. If not even one
-        cell fits, the scale is reduced until it does (check ``bond_pt``).
+        As many columns as fit; spare width is spread between columns, so cells stay just
+        large enough. If not even one cell fits, the scale is reduced until it does
+        (check ``bond_pt``).
     """
     gap = GAP * acs.BOND
     width_pt = width * fmt.size_in * PT_PER_IN
@@ -112,5 +114,5 @@ def solve(fmt, width, zoom, needed, caption):
     scale = min(scale, width_pt / (2 * gap + needed))  # one cell must fit
     total = width_pt / scale
     columns = max(1, int((total - gap) // (needed + gap)))
-    cell = (total - 2 * gap - (columns - 1) * gap) / columns
-    return Geometry(columns, cell, caption, scale, total)
+    pitch = (total - 2 * gap + gap) / columns  # column centres are evenly spaced across the width
+    return Geometry(columns, needed, pitch, caption, scale, total)

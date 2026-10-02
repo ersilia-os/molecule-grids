@@ -265,15 +265,15 @@ def draw_grid(
 
 def _square_layout(geo, drawn, rows):
     """Square cells of equal size."""
-    W, gap, cell = geo.width, geo.gap, geo.cell
+    W, gap, cell, pitch = geo.width, geo.gap, geo.cell, geo.pitch
     place, y = [], gap
     for r in rows:
         rh = max(drawn[i][4] for i in r)  # tallest ink in the row
-        x = (W - (len(r) * cell + (len(r) - 1) * gap)) / 2  # centre partial rows
+        x = (W - len(r) * pitch) / 2  # centre partial rows
         for i in r:
             cy = y + cell / 2
-            place.append((i, 0, x + cell / 2, cy, cy + rh / 2 + geo.caption_base))  # shared caption baseline
-            x += cell + gap
+            place.append((i, 0, x + pitch / 2, cy, cy + rh / 2 + geo.caption_base))  # shared caption baseline
+            x += pitch
         y += geo.row_pitch
     return W, geo.page_height(len(rows)), place, max(map(len, rows))
 
