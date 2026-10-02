@@ -140,6 +140,21 @@ st.html("""
   .st-key-input-actions button p { font-size: 0.85rem; font-weight: 450; }
   .st-key-input-actions button:hover { color: #6C5CE7; }
 
+  /* Figure toolbar: pages, details, downloads, always on one line. Everything keeps its
+     natural width except the details, which take the rest and end in an ellipsis if short. */
+  .st-key-figure-bar { flex-wrap: nowrap !important; }
+  .st-key-figure-bar > [data-testid="stElementContainer"] { flex: 0 0 auto !important; }
+  .st-key-figure-bar > [data-testid="stElementContainer"]:has(.figure-details) {
+      flex: 1 1 0 !important; min-width: 0 !important; overflow: hidden; }
+  .figure-details { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                    font-size: 0.875rem; color: rgba(44, 62, 80, 0.6); }
+  .st-key-figure-bar button { white-space: nowrap; }
+  @media (max-width: 1100px) {  /* narrow windows: tighter buttons, so they still fit one line */
+    .st-key-figure-bar { gap: 0.25rem !important; }
+    .st-key-figure-bar [data-testid="stDownloadButton"] button { padding: 0.25rem 0.45rem; min-height: 2rem; }
+    .st-key-figure-bar [data-testid="stDownloadButton"] button p { font-size: 0.8rem; }
+  }
+
   /* Buttons are furniture: quiet weight, colour carries state. */
   .st-key-card-figure button p { font-weight: 450; }
 </style>""")
@@ -324,9 +339,20 @@ stem = f"molecules_{mode}"
 dpi = FORMATS[mode].png_dpi
 
 with st.container(border=True, key="card-figure"):
-    with st.container(horizontal=True, vertical_alignment="center"):
-        page = min(max(st.session_state.get("page", 1), 1), n_pages)  # clamp after edits
-        st.session_state.page = page
+    page = min(max(st.session_state.get("page", 1), 1), n_pages)  # clamp after edits
+    st.session_state.page = page
+    svg = pages[page - 1]
+    name = f"{stem}_{page}" if n_pages > 1 else stem
+    # One toolbar line: pages, details (cut short with an ellipsis if space runs out), downloads.
+    height_mm = float(re.search(r"height='([\d.]+)pt'", svg).group(1)) * 25.4 / 72
+    details = (
+        f"{len(smiles)} structure{'s' if len(smiles) != 1 else ''} · "
+        f"{info['width']:.0f} × {height_mm:.0f} mm · bond {info['bond']:.1f} pt"
+    )
+    about = f"{mode.capitalize()} format, {'medicinal chemist' if style == 'medicinal' else 'computational'} style" + (
+        f"; auto width, {info['share']:.0%} of the full width" if auto else ""
+    )
+    with st.container(horizontal=True, vertical_alignment="center", gap="small", key="figure-bar"):
         if n_pages > 1:
             st.button(
                 "",
@@ -338,7 +364,7 @@ with st.container(border=True, key="card-figure"):
                 args=(-1,),
                 help="Previous page",
             )
-            st.caption(f"Page {page} of {n_pages}", width="content")
+            st.caption(f"{page} / {n_pages}", width="content")
             st.button(
                 "",
                 icon=":material/chevron_right:",
@@ -349,16 +375,7 @@ with st.container(border=True, key="card-figure"):
                 args=(1,),
                 help="Next page",
             )
-        svg = pages[page - 1]
-        height_mm = float(re.search(r"height='([\d.]+)pt'", svg).group(1)) * 25.4 / 72
-        st.caption(
-            f"{len(smiles)} structure{'s' if len(smiles) != 1 else ''} · "
-            f"{mode.capitalize()} · {'medicinal chemist' if style == 'medicinal' else 'computational'} · "
-            f"{info['width']:.0f} × {height_mm:.0f} mm"
-            + (f" (auto, {info['share']:.0%} width)" if auto else "")
-            + f" · bond {info['bond']:.1f} pt"
-        )
-        name = f"{stem}_{page}" if n_pages > 1 else stem
+        st.markdown(f"<span class='figure-details' title='{about}'>{details}</span>", unsafe_allow_html=True)
         st.download_button(
             "SVG",
             svg,
@@ -377,12 +394,12 @@ with st.container(border=True, key="card-figure"):
         )
         if n_pages > 1:
             st.download_button(
-                "All pages",
+                "ZIP",
                 all_pages_zip(tuple(pages), stem, dpi),
                 file_name=f"{stem}.zip",
                 mime="application/zip",
                 icon=":material/folder_zip:",
-                help="Every page as SVG and PNG, numbered in reading order.",
+                help="All pages, as SVG and PNG, numbered in reading order.",
             )
     b64 = base64.b64encode(svg.encode()).decode()
     st.markdown(
