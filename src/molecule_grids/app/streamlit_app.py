@@ -155,7 +155,7 @@ with st.sidebar:
             icon=":material/science:",
             type="tertiary",
             on_click=get_examples,
-            help=f"Replace the list with {examples.SHUFFLE_SIZE} random global-health drugs, "
+            help=f"Replace the list with {examples.SIZES[0]} to {examples.SIZES[1]} random global-health drugs, "
             "including analogue families that share a scaffold.",
         )
         st.button(
