@@ -34,7 +34,7 @@ class Format:
     max_height_in : float
         Tallest figure, in inches; taller grids are split into pages.
     png_dpi : int
-        Resolution of PNG and GIF exports.
+        Resolution of PNG exports.
     """
 
     name: str

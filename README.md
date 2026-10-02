@@ -6,7 +6,7 @@ Draw SMILES as a clean grid of 2D structures, for slides or print. Two drawing s
 pip install git+https://github.com/ersilia-os/molecule-grids.git          # add [app] for the web app
 ```
 
-PNG, PDF and GIF export need the cairo library (`brew install cairo` or `apt install libcairo2`).
+PNG and PDF export need the cairo library (`brew install cairo` or `apt install libcairo2`).
 
 ## Python
 
@@ -14,7 +14,7 @@ PNG, PDF and GIF export need the cairo library (`brew install cairo` or `apt ins
 from molecule_grids import draw_grid, read_molecules
 
 grid = draw_grid(["CCO", "c1ccccc1O"], names=["Ethanol", "Phenol"], format="print", width=0.5, size="large")
-grid.save("grid.svg")  # .svg, .png, .pdf or .gif
+grid.save("grid.svg")  # .svg, .png or .pdf; one file per page (grid_1.svg, ...) if needed
 
 smiles, names = read_molecules("hits.csv")  # .csv with a smiles column, or .smi lines "SMILES name"
 draw_grid(smiles, names, format="slide", style="computational", number=True).save("hits.png")
@@ -26,11 +26,11 @@ draw_grid(smiles, names, format="slide", style="computational", number=True).sav
 
 Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a proportion of the full format width (180 mm for print, two journal columns; 330 mm for slides).
 
-- Figures are at most one page tall: 247 mm in print (Nature) and 186 mm on slides (16:9). More molecules split into pages (GIF frames).
+- Figures are at most one page tall: 247 mm in print (Nature) and 186 mm on slides (16:9). More molecules split into pages.
 - Molecules have a fixed size: `size="small"`, `"medium"` (default) or `"large"`, i.e. 70, 100 or 140 % of the standard bond (14.4 pt in print, ACS; 20 pt on slides).
 - Each molecule sits in a cell on aligned columns. The width holds as many columns as fit 90 % of the molecules; wider ones span two or more columns. Each row is as tall as its tallest molecule.
 - `squeeze` reorders (and turns) molecules to fill the figure at the same bond length and width: `"rows"` (default; flowing like text), `"grid"` (aligned columns) or `"free"` (interlocking outlines). `squeeze=False` keeps the cells above, in input order.
-- A figure holds up to 100 molecules; more raise `TooManyMolecules`. Save as `.gif` to get one frame per 100.
+- A page holds up to 100 molecules. With several pages, `grid.pages` holds one SVG each and `save` writes one numbered file per page.
 
 ## Command line
 

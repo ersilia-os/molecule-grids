@@ -17,14 +17,14 @@ from molecule_grids.utils.logging import logger
 # A caption that is only a compound number (1, 2, 12, 3a, 10b ...) is set in bold (ACS style).
 COMPOUND_NUMBER = re.compile(r"^\d+[a-z]{0,2}$")
 
-MAX_MOLECULES = 100  # per figure; more are split into GIF frames
+MAX_MOLECULES = 100  # per page
 TYPICAL = 0.9  # columns are sized so this share of molecules fits one cell; wider ones span
 FRAME_COLOR = {"print": "#000000", "slide": "#50285A"}  # black for journals, Ersilia plum on slides
 SQUEEZE = {False: None, None: None, True: "rows", "grid": "grid", "rows": "rows", "free": "free"}
 
 
 class TooManyMolecules(ValueError):
-    """More molecules than ``MAX_MOLECULES`` for a single figure."""
+    """The molecules need more than one page, so there is no single SVG to return."""
 
 
 class Grid:
@@ -46,7 +46,7 @@ class Grid:
         Number of columns, set by the width (when squeezing, possibly fewer; None for
         ``squeeze="free"``).
     capacity : int
-        Most molecules in one figure: up to ``MAX_MOLECULES`` (100), fewer when the page
+        Most molecules on one page: up to ``MAX_MOLECULES`` (100), fewer when the page
         height is reached (247 mm in print, 186 mm on slides).
     bond_pt : float
         Bond length in pt when the figure is placed at 100 %.
@@ -81,14 +81,6 @@ class Grid:
     def _repr_svg_(self):
         return self.pages[0]
 
-    def _single_page(self, what):
-        if len(self.pages) > 1:
-            raise TooManyMolecules(
-                f"{len(self.names)} molecules exceed the {self.capacity} that fit in one figure. "
-                f"Save as .gif to get {len(self.pages)} frames, or draw fewer molecules; "
-                f"`.pages` holds each frame as {what}."
-            )
-
     @property
     def svg(self):
         """The figure as an SVG string.
@@ -96,9 +88,13 @@ class Grid:
         Raises
         ------
         TooManyMolecules
-            If the molecules exceed ``capacity``.
+            If the molecules need several pages; use ``pages`` or :meth:`save` instead.
         """
-        self._single_page("SVG")
+        if len(self.pages) > 1:
+            raise TooManyMolecules(
+                f"{len(self.names)} molecules need {len(self.pages)} pages ({self.capacity} fit on one). "
+                "Use `.pages`, or `.save()`, which writes one file per page."
+            )
         return self.pages[0]
 
     def save(self, path):
@@ -107,30 +103,34 @@ class Grid:
         Parameters
         ----------
         path : str or Path
-            ``.svg``, ``.png``, ``.pdf`` or ``.gif``. A GIF has one frame per page (``capacity`` molecules) and is the
-            only type that accepts more molecules than ``capacity``.
+            ``.svg``, ``.png`` or ``.pdf``. With several pages, one file per page is written,
+            numbered ``name_1.svg``, ``name_2.svg``, ...
 
         Returns
         -------
-        Path
-            The written file.
+        list of Path
+            The written files, one per page.
         """
         from molecule_grids.io import export
 
         path = Path(path)
         ext = path.suffix.lower()
-        if ext == ".gif":
-            path.write_bytes(export.to_gif(self.pages, self._fmt.png_dpi))
-        elif ext == ".svg":
-            path.write_text(self.svg)
-        elif ext == ".png":
-            path.write_bytes(export.to_png(self.svg, self._fmt.png_dpi))
-        elif ext == ".pdf":
-            path.write_bytes(export.to_pdf(self.svg))
-        else:
-            raise ValueError(f"unsupported file type {ext!r}: use .svg, .png, .pdf or .gif")
-        logger.success(f"Saved {path}")
-        return path
+        write = {
+            ".svg": lambda p, svg: p.write_text(svg),
+            ".png": lambda p, svg: p.write_bytes(export.to_png(svg, self._fmt.png_dpi)),
+            ".pdf": lambda p, svg: p.write_bytes(export.to_pdf(svg)),
+        }
+        if ext not in write:
+            raise ValueError(f"unsupported file type {ext!r}: use .svg, .png or .pdf")
+        paths = (
+            [path]
+            if len(self.pages) == 1
+            else [path.with_stem(f"{path.stem}_{k}") for k in range(1, len(self.pages) + 1)]
+        )
+        for p, svg in zip(paths, self.pages):
+            write[ext](p, svg)
+            logger.success(f"Saved {p}")
+        return paths
 
 
 def _to_mols(molecules):
@@ -411,17 +411,9 @@ def _free_layout(geo, get, idx, columns, capw, group):
 
 
 def _render(geo, layouts, get, names, bold, frame=None):
-    """Write one SVG per layout on a shared canvas; ``frame`` is ``(line width, colour)`` or None."""
-    W, H = max(lay[0] for lay in layouts), max(lay[1] for lay in layouts)
-    outline = ""
-    if frame:  # stroke drawn inside the canvas edge
-        lw, color = frame
-        outline = (
-            f"\n<rect x='{lw / 2:.2f}' y='{lw / 2:.2f}' width='{W - lw:.2f}' height='{H - lw:.2f}' "
-            f"fill='none' stroke='{color}' stroke-width='{lw:.2f}'/>"
-        )
+    """Write one SVG per layout (page); ``frame`` is ``(line width, colour)`` or None."""
     pages = []
-    for _, _, place, _ in layouts:
+    for W, H, place, _ in layouts:
         body = []
         for i, r, cx, cy, baseline in place:
             inner, x0, y0, w, h = get(i, r)
@@ -434,10 +426,16 @@ def _render(geo, layouts, get, names, bold, frame=None):
                     f"font-family=\"{acs.FONT_STACK}\" font-size='{geo.caption:.2f}' "
                     f"text-anchor='middle' fill='#000'{weight}>{html.escape(names[i])}</text>"
                 )
+        if frame:  # stroke drawn inside the canvas edge
+            lw, color = frame
+            body.append(
+                f"<rect x='{lw / 2:.2f}' y='{lw / 2:.2f}' width='{W - lw:.2f}' height='{H - lw:.2f}' "
+                f"fill='none' stroke='{color}' stroke-width='{lw:.2f}'/>"
+            )
         pages.append(
             "<?xml version='1.0' encoding='utf-8'?>\n"
             f"<svg xmlns='http://www.w3.org/2000/svg' width='{W * geo.scale:.2f}pt' "
             f"height='{H * geo.scale:.2f}pt' viewBox='0 0 {W:.2f} {H:.2f}'>\n"
-            "<rect width='100%' height='100%' fill='#FFFFFF'/>\n" + "\n".join(body) + outline + "\n</svg>\n"
+            "<rect width='100%' height='100%' fill='#FFFFFF'/>\n" + "\n".join(body) + "\n</svg>\n"
         )
     return pages

@@ -4,7 +4,10 @@ Run with `molecule-grids app` or `streamlit run src/molecule_grids/app/streamlit
 """
 
 import base64
+import io
 import random
+import re
+import zipfile
 from pathlib import Path
 
 import streamlit as st
@@ -44,6 +47,17 @@ def figure(smiles, names, fmt, style, width, size, number, group, frame, squeeze
         "height": grid.height_mm,
     }
     return grid.pages, summary
+
+
+@st.cache_data(show_spinner="Packing pages…")
+def all_pages_zip(pages, stem, dpi):
+    """Every page as numbered SVG and PNG files in one ZIP archive."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for k, svg in enumerate(pages, 1):
+            z.writestr(f"{stem}_{k}.svg", svg)
+            z.writestr(f"{stem}_{k}.png", export.to_png(svg, dpi))
+    return buf.getvalue()
 
 
 def get_examples():
@@ -254,53 +268,69 @@ if not smiles:
     st.stop()
 
 pages, info = figure(tuple(smiles), tuple(names), mode, style, width, size, number, group, frame, squeeze)
-if len(pages) > 1:
+n_pages = len(pages)
+if n_pages > 1:
     with st.container(key="callout-pages"):
         st.caption(
-            f":orange[:material/warning:] Showing the first {info['capacity']} of {len(smiles)} molecules. "
-            f"Download the GIF for all of them ({len(pages)} frames), or try a smaller size or Squeeze."
+            f":orange[:material/warning:] {len(smiles)} molecules need {n_pages} pages "
+            f"({info['capacity']} fit on one). Pick a page below, download them all, or try a smaller "
+            "size or another squeeze."
         )
 
-svg = pages[0]
 stem = f"molecules_{mode}"
 dpi = FORMATS[mode].png_dpi
-b64 = base64.b64encode(svg.encode()).decode()
 
 with st.container(border=True, key="card-figure"):
     with st.container(horizontal=True, vertical_alignment="center"):
+        page = 1
+        if n_pages > 1:
+            page = st.number_input(
+                "Page",
+                1,
+                n_pages,
+                1,
+                key=f"page-{n_pages}",
+                width=110,
+                label_visibility="collapsed",
+                help=f"Page 1 to {n_pages}.",
+            )
+        svg = pages[page - 1]
+        height_mm = float(re.search(r"height='([\d.]+)pt'", svg).group(1)) * 25.4 / 72
         st.caption(
-            f"{len(smiles)} structure{'s' if len(smiles) != 1 else ''} · "
+            (f"Page {page} of {n_pages} · " if n_pages > 1 else "")
+            + f"{len(smiles)} structure{'s' if len(smiles) != 1 else ''} · "
             f"{mode.capitalize()} · {'medicinal chemist' if style == 'medicinal' else 'computational'} · "
-            f"{info['width']:.0f} × {info['height']:.0f} mm · bond {info['bond']:.1f} pt"
+            f"{info['width']:.0f} × {height_mm:.0f} mm · bond {info['bond']:.1f} pt"
         )
-        if len(pages) > 1:
+        name = f"{stem}_{page}" if n_pages > 1 else stem
+        st.download_button(
+            "SVG",
+            svg,
+            file_name=f"{name}.svg",
+            mime="image/svg+xml",
+            icon=":material/download:",
+            help="Vector, for Word, Illustrator or slides." + (" This page." if n_pages > 1 else ""),
+        )
+        st.download_button(
+            "PNG",
+            export.to_png(svg, dpi),
+            file_name=f"{name}.png",
+            mime="image/png",
+            icon=":material/download:",
+            help=f"{dpi} dpi raster." + (" This page." if n_pages > 1 else ""),
+        )
+        if n_pages > 1:
             st.download_button(
-                "GIF",
-                export.to_gif(pages, dpi),
-                file_name=f"{stem}.gif",
-                mime="image/gif",
-                icon=":material/download:",
-                help=f"All molecules, {info['capacity']} per frame.",
+                "All pages",
+                all_pages_zip(tuple(pages), stem, dpi),
+                file_name=f"{stem}.zip",
+                mime="application/zip",
+                icon=":material/folder_zip:",
+                help="Every page as SVG and PNG, numbered in reading order.",
             )
-        else:
-            st.download_button(
-                "SVG",
-                svg,
-                file_name=f"{stem}.svg",
-                mime="image/svg+xml",
-                icon=":material/download:",
-                help="Vector, for Word, Illustrator or slides.",
-            )
-            st.download_button(
-                "PNG",
-                export.to_png(svg, dpi),
-                file_name=f"{stem}.png",
-                mime="image/png",
-                icon=":material/download:",
-                help=f"{dpi} dpi raster.",
-            )
+    b64 = base64.b64encode(svg.encode()).decode()
     st.markdown(
         f"<div class='figure'><img src='data:image/svg+xml;base64,{b64}' "
-        f"alt='Grid of {len(smiles)} chemical structures'/></div>",
+        f"alt='Grid of chemical structures, page {page} of {n_pages}'/></div>",
         unsafe_allow_html=True,
     )

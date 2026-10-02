@@ -37,19 +37,19 @@ def test_size_presets(fmt, bond):
 def test_save_types(tmp_path):
     grid = draw_grid(SMILES, NAMES, format="print", number=True)
     for ext in ("svg", "png", "pdf"):
-        assert grid.save(tmp_path / f"grid.{ext}").stat().st_size > 0
+        (path,) = grid.save(tmp_path / f"grid.{ext}")
+        assert path.stat().st_size > 0
 
 
-def test_capacity_and_gif(tmp_path):
+def test_pages_save_as_numbered_files(tmp_path):
     pool = [s for fam in FAMILIES for s, _ in fam] + [s for s, _ in SINGLES]
-    grid = draw_grid(pool * 3, format="slide", width=0.5)  # > 100 molecules
+    grid = draw_grid(pool * 3, format="slide", width=0.5)
     assert len(grid.pages) > 1
     with pytest.raises(TooManyMolecules):
-        grid.save(tmp_path / "grid.svg")
-    from PIL import Image
-
-    gif = Image.open(grid.save(tmp_path / "grid.gif"))
-    assert gif.n_frames == len(grid.pages)
+        _ = grid.svg
+    paths = grid.save(tmp_path / "grid.png")
+    assert [p.name for p in paths] == [f"grid_{k}.png" for k in range(1, len(grid.pages) + 1)]
+    assert all(p.stat().st_size > 0 for p in paths)
 
 
 def test_style_is_independent_of_format():
@@ -105,8 +105,7 @@ def test_page_height_cap(tmp_path, fmt, max_in, mode):
     heights = [float(re.search(r"height='([\d.]+)pt'", p).group(1)) / 72 for p in grid.pages]
     assert max(heights) <= max_in + 0.01
     assert sorted(grid.order) == list(range(len(pool)))
-    with pytest.raises(TooManyMolecules):
-        grid.save(tmp_path / "grid.svg")
+    assert len(grid.save(tmp_path / "grid.svg")) == len(grid.pages)
 
 
 def test_errors():

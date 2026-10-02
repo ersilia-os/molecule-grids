@@ -1,11 +1,17 @@
 import click
 
-from molecule_grids import FORMATS, TooManyMolecules, draw_grid, read_molecules
+from molecule_grids import FORMATS, draw_grid, read_molecules
 
 
 @click.command()
 @click.argument("input", type=click.Path(exists=True, dir_okay=False))
-@click.option("-o", "--output", required=True, type=click.Path(dir_okay=False), help="Output .svg, .png, .pdf or .gif.")
+@click.option(
+    "-o",
+    "--output",
+    required=True,
+    type=click.Path(dir_okay=False),
+    help="Output .svg, .png or .pdf; one numbered file per page.",
+)
 @click.option(
     "-f",
     "--format",
@@ -60,6 +66,6 @@ def draw(input, output, fmt, style, width, size, number, group, frame, squeeze):
             squeeze=False if squeeze == "off" else squeeze,
         )
         grid.save(output)
-    except (TooManyMolecules, ValueError, OSError) as e:
+    except (ValueError, OSError) as e:
         raise click.ClickException(str(e)) from e
     click.echo(repr(grid))
