@@ -41,7 +41,6 @@ def test_save_types(tmp_path):
 
 def test_capacity_and_gif(tmp_path):
     pool = [s for fam in FAMILIES for s, _ in fam] + [s for s, _ in SINGLES]
-    assert len(draw_grid(pool, format="print", width=0.5).pages) == 1  # rows grow as needed
     grid = draw_grid(pool * 3, format="slide", width=0.5)  # > 100 molecules
     assert len(grid.pages) > 1
     with pytest.raises(TooManyMolecules):
@@ -84,17 +83,17 @@ def test_squeeze(mode):
     assert again.svg == tight.svg  # deterministic
 
 
+@pytest.mark.parametrize("fmt, max_in", [("print", 247 / 25.4), ("slide", 13 * 9 / 16)])
 @pytest.mark.parametrize("mode", [False, "grid", "rows", "free"])
-def test_slide_height_cap(tmp_path, mode):
+def test_page_height_cap(tmp_path, fmt, max_in, mode):
     pool = [s for fam in FAMILIES for s, _ in fam] + [s for s, _ in SINGLES]
-    grid = draw_grid(pool, format="slide", squeeze=mode)
+    grid = draw_grid(pool, format=fmt, squeeze=mode)
     assert len(grid.pages) > 1
     heights = [float(re.search(r"height='([\d.]+)pt'", p).group(1)) / 72 for p in grid.pages]
-    assert max(heights) <= 13 * 9 / 16 + 0.01
+    assert max(heights) <= max_in + 0.01
     assert sorted(grid.order) == list(range(len(pool)))
     with pytest.raises(TooManyMolecules):
         grid.save(tmp_path / "grid.svg")
-    assert draw_grid(pool, format="print", squeeze=mode).pages[1:] == []  # print grows instead
 
 
 def test_errors():

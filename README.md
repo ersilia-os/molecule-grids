@@ -26,7 +26,7 @@ draw_grid(smiles, names, format="slide", group=True, number=True).save("hits.png
 
 Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a fraction of the full format width (7.09 in for print, 13 in for slides).
 
-- Slide figures are at most 7.31 in tall (a 16:9 slide); more molecules split into pages (GIF frames). Print figures grow as needed.
+- Figures are at most one page tall: 9.72 in (247 mm, Nature) in print and 7.31 in (16:9) on slides. More molecules split into pages (GIF frames).
 - Molecules have a fixed size: `size="small"`, `"medium"` (default) or `"large"`, i.e. 70, 100 or 140 % of the standard bond (14.4 pt in print, ACS; 20 pt on slides).
 - Each molecule sits in a square cell. The width holds as many columns as fit; rows are added as needed.
 - `squeeze` drops the square cells and reorders (and turns) molecules to fill the figure at the same bond length: `"grid"` (aligned, also `True`), `"rows"` (flowing like text) or `"free"` (interlocking outlines).

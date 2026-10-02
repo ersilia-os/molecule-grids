@@ -42,8 +42,8 @@ class Grid:
         Number of columns, set by the width (when squeezing, possibly fewer; None for
         ``squeeze="free"``).
     capacity : int
-        Most molecules in one figure: up to ``MAX_MOLECULES`` (100), fewer when a slide's
-        height (7.31 in, 16:9) is reached.
+        Most molecules in one figure: up to ``MAX_MOLECULES`` (100), fewer when the page
+        height is reached (9.72 in in print, 7.31 in on slides).
     bond_pt : float
         Bond length in pt when the figure is placed at 100 %.
     width_in, height_in : float
@@ -228,9 +228,8 @@ def draw_grid(
         )
     columns = geo.columns
     max_rows = max(1, MAX_MOLECULES // columns)
-    max_h = fmt.max_height_in * sizing.PT_PER_IN / geo.scale if fmt.max_height_in else float("inf")
-    if fmt.max_height_in:  # rows that fit the page height
-        max_rows = max(1, min(max_rows, int((max_h - geo.gap) // geo.row_pitch)))
+    max_h = fmt.max_height_in * sizing.PT_PER_IN / geo.scale  # page height, in drawing units
+    max_rows = max(1, min(max_rows, int((max_h - geo.gap) // geo.row_pitch)))
     variants = {(i, 0): d for i, d in enumerate(drawn)}
 
     def get(i, r):
