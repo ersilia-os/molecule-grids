@@ -2,10 +2,8 @@
 
 from molecule_grids.depict import acs
 
-# Line width and caption size relative to the bond, as in the original screen style
-# (1.6 px lines and 14 px captions on a 25 px bond).
+# Line width relative to the bond, as in the original screen style (1.6 px lines on a 25 px bond).
 LINE_RATIO = 1.6 / 25
-CAPTION_RATIO = 14 / 25
 
 # RDKit's default hues, with the two that fail on white (cyan F, lime Cl) darkened.
 PALETTE = {

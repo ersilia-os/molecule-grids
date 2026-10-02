@@ -28,7 +28,7 @@ Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a propor
 
 - Figures are at most one page tall: 247 mm in print (Nature) and 186 mm on slides (16:9), or less with `max_height` (a fraction of the page). More molecules split into pages; nothing is cut.
 - If all molecules fit in one row, the figure is only as wide as they need.
-- Molecules have a fixed size: `size="small"`, `"medium"` (default) or `"large"`, i.e. 70, 100 or 140 % of the standard bond (14.4 pt in print, ACS; 20 pt on slides).
+- Molecules have a fixed size: `size="small"`, `"medium"` (default) or `"large"` sets atom labels and captions to stylia's font sizes (print 5/6/8 pt, slides 8/10/13 pt); bonds are 1.44 times that, as in ChemDraw ACS.
 - Each molecule sits in a cell on aligned columns. The width holds as many columns as fit 90 % of the molecules; wider ones span two or more columns. Each row is as tall as its tallest molecule.
 - `squeeze` reorders (and turns) molecules to fill the figure at the same bond length and width: `"rows"` (default; flowing like text), `"grid"` (aligned columns) or `"free"` (interlocking outlines). `squeeze=False` keeps the cells above, in input order.
 - A page holds up to 100 molecules. With several pages, `grid.pages` holds one SVG each and `save` writes one numbered file per page.

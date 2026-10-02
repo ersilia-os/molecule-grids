@@ -38,7 +38,7 @@ from molecule_grids import FORMATS, draw_grid, read_molecules
     type=click.Choice(["small", "medium", "large"]),
     default="medium",
     show_default=True,
-    help="Molecule size: 70, 100 or 140 % of the standard bond.",
+    help="Molecule size: labels at stylia's font sizes (print 5/6/8 pt, slide 8/10/13 pt).",
 )
 @click.option("--number", is_flag=True, help="Caption with bold compound numbers 1, 2, 3...")
 @click.option("--group", is_flag=True, help="Place analogues sharing a scaffold side by side.")

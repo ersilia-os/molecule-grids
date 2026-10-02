@@ -178,8 +178,8 @@ with st.sidebar:
         required=True,
         width="stretch",
         format_func=lambda m: {"slide": ":material/desktop_windows: Slide", "print": ":material/print: Print"}[m],
-        help="The page. Slide: 330 mm wide at full width, up to 186 mm tall (16:9), 20 pt bonds at "
-        "Medium, plum frame. Print: 180 mm (two journal columns), up to 247 mm tall, 14.4 pt bonds "
+        help="The page. Slide: 330 mm wide at full width, up to 186 mm tall (16:9), plum frame. "
+        "Print: 180 mm (two journal columns), up to 247 mm tall, "
         "(ACS), black frame; insert the SVG at 100 % in Word or Illustrator to keep the dimensions.",
     )
     style = st.segmented_control(
@@ -227,8 +227,8 @@ with st.sidebar:
         required=True,
         width="stretch",
         format_func=str.capitalize,
-        help="70, 100 or 140 % of the standard bond: 14.4 pt in print (ACS) and 20 pt on slides at Medium. "
-        "Bigger molecules mean fewer columns.",
+        help="Atom labels and captions at stylia's font sizes: 5, 6 or 8 pt in print and 8, 10 or 13 pt "
+        "on slides. Bonds are 1.44 times that (ChemDraw ACS proportions). Bigger molecules mean fewer columns.",
     )
     squeeze = st.segmented_control(
         "Squeeze",

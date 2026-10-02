@@ -2,7 +2,9 @@
 
 A figure's width is a fraction of the format's base width (stylia's ``SIZE``): 7.09 in
 for print (Nature two-column) and 13 in for slides. Molecules are drawn at a fixed size:
-at ``size="medium"`` the bond is 14.4 pt in print (ACS) and 20 pt on slides. The width holds as
+atom labels and captions use stylia's font sizes (print 5, 6 or 8 pt; slides 8, 10 or 13 pt
+for small, medium or large), and the bond follows with ChemDraw ACS proportions
+(bond = 1.44 x label). The width holds as
 many square cells as fit the largest molecule at that size, one molecule per cell, and the
 height follows from the number of rows, up to a page: 247 mm (9.72 in, Nature's maximum
 figure height) in print and a 16:9 slide (7.31 in) on slides. stylia defines no maximum
@@ -16,7 +18,7 @@ from molecule_grids.depict import acs
 
 PT_PER_IN = 72.0
 MM_PER_PT = 25.4 / 72
-SIZES = {"small": 0.7, "medium": 1.0, "large": 1.4}  # molecule size, relative to medium
+SIZES = ("small", "medium", "large")
 
 
 @dataclass(frozen=True)
@@ -29,8 +31,9 @@ class Format:
         ``"print"`` or ``"slide"``.
     size_in : float
         Full figure width in inches (stylia ``SIZE``).
-    bond_pt : float
-        Bond length at ``size="medium"``, in pt.
+    label_pt : dict
+        Atom label and caption size for each of ``SIZES``, in pt (stylia ``FONTSIZE_SMALL``,
+        ``FONTSIZE`` and ``FONTSIZE_BIG``).
     max_height_in : float
         Tallest figure, in inches; taller grids are split into pages.
     png_dpi : int
@@ -39,14 +42,16 @@ class Format:
 
     name: str
     size_in: float
-    bond_pt: float
+    label_pt: dict
     max_height_in: float
     png_dpi: int
 
 
 FORMATS = {
-    "print": Format("print", 7.09, acs.ACS["bond"], 247 / 25.4, 300),  # Nature two-column width, page height
-    "slide": Format("slide", 13.0, 20.0, 13.0 * 9 / 16, 150),  # 16:9 slide; labels about 14 pt
+    # Nature two-column width and page height; stylia print font sizes.
+    "print": Format("print", 7.09, dict(zip(SIZES, (5, 6, 8))), 247 / 25.4, 300),
+    # Wide 16:9 slide; stylia slide font sizes.
+    "slide": Format("slide", 13.0, dict(zip(SIZES, (8, 10, 13))), 13.0 * 9 / 16, 150),
 }
 
 GAP = 1.6  # gap between cells and page margin, in bond lengths
@@ -94,7 +99,7 @@ class Geometry:
         return min(self.columns, max(1, math.ceil((size + self.gap) / self.pitch - 1e-9)))
 
 
-def solve(fmt, width, factor, largest, typical, caption):
+def solve(fmt, width, bond_pt, largest, typical, caption):
     """Solve the grid geometry at a fixed molecule size.
 
     Parameters
@@ -103,8 +108,8 @@ def solve(fmt, width, factor, largest, typical, caption):
         Output format.
     width : float
         Figure width as a fraction of ``fmt.size_in``.
-    factor : float
-        Molecule size relative to ``fmt.bond_pt`` (a value of ``SIZES``).
+    bond_pt : float
+        Bond length for the chosen size, in pt.
     largest : float
         Width of the widest molecule (or caption), in drawing units; it must fit the figure.
     typical : float
@@ -121,7 +126,7 @@ def solve(fmt, width, factor, largest, typical, caption):
     """
     gap = GAP * acs.BOND
     width_pt = width * fmt.size_in * PT_PER_IN
-    scale = fmt.bond_pt * factor / acs.BOND
+    scale = bond_pt / acs.BOND
     scale = min(scale, width_pt / (2 * gap + largest))  # the largest molecule must fit
     total = width_pt / scale
     columns = max(1, int((total - gap) // (typical + gap)))

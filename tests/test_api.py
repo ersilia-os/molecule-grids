@@ -9,6 +9,7 @@ from molecule_grids.data.examples import DEFAULT, FAMILIES, SINGLES
 
 SMILES = [s for s, _ in DEFAULT]
 NAMES = [n for _, n in DEFAULT]
+POOL = [m for fam in FAMILIES for m in fam] + SINGLES  # 35 drugs, more than one row
 
 
 def width_in(svg):
@@ -18,18 +19,22 @@ def width_in(svg):
 @pytest.mark.parametrize("fmt, full", [("print", 7.09), ("slide", 13.0)])
 def test_width_follows_format(fmt, full):
     for w in (1.0, 0.5):
-        grid = draw_grid(SMILES, NAMES, format=fmt, width=w)
+        grid = draw_grid([s for s, _ in POOL], format=fmt, width=w)
         assert width_in(grid.pages[0]) == pytest.approx(w * full, abs=0.01)
 
 
-@pytest.mark.parametrize("fmt, bond", [("print", 14.4), ("slide", 20.0)])
-def test_size_presets(fmt, bond):
-    for size, factor in (("small", 0.7), ("medium", 1.0), ("large", 1.4)):
-        assert draw_grid(SMILES, format=fmt, size=size).bond_pt == pytest.approx(bond * factor)
+@pytest.mark.parametrize("fmt, labels", [("print", (5, 6, 8)), ("slide", (8, 10, 13))])
+def test_size_presets(fmt, labels):
+    for size, label in zip(("small", "medium", "large"), labels):  # stylia font sizes
+        grid = draw_grid(SMILES, NAMES, format=fmt, size=size)
+        assert grid.bond_pt == pytest.approx(label * 14.4 / 10)  # ACS proportions
+        size_pt = float(re.search(r"font-size='([\d.]+)'", grid.pages[0]).group(1)) * grid.bond_pt / 26
+        assert size_pt == pytest.approx(label, abs=0.05)  # captions match the labels
+    bond = labels[2] * 1.44
     small, large = (draw_grid(SMILES, format=fmt, size=s, squeeze=False) for s in ("small", "large"))
     assert small.columns > large.columns
     tiny = draw_grid(SMILES, format=fmt, width=0.1, size="large")  # not even one column fits: shrunk
-    assert tiny.bond_pt < bond * 1.4 and tiny.columns == 1
+    assert tiny.bond_pt < bond and tiny.columns == 1
     with pytest.raises(ValueError, match="size"):
         draw_grid(SMILES, size="huge")
 
@@ -82,25 +87,26 @@ def ink_points(svg):
 
 @pytest.mark.parametrize("mode", [True, "rows", "free"])
 def test_squeeze(mode):
-    square = draw_grid(SMILES, NAMES, format="print", squeeze=False)
-    tight = draw_grid(SMILES, NAMES, format="print", squeeze=mode, number=True)
+    smiles = [s for s, _ in POOL[:20]]
+    square = draw_grid(smiles, format="print", squeeze=False)
+    tight = draw_grid(smiles, format="print", squeeze=mode, number=True)
     assert tight.bond_pt == square.bond_pt
     assert tight.width_mm == pytest.approx(square.width_mm)  # the width never changes
     assert tight.height_mm < square.height_mm
-    assert sorted(tight.order) == list(range(len(SMILES)))
-    assert [tight.names[i] for i in tight.order] == [str(k + 1) for k in range(len(SMILES))]
+    assert sorted(tight.order) == list(range(len(smiles)))
+    assert [tight.names[i] for i in tight.order] == [str(k + 1) for k in range(len(smiles))]
     inks = ink_points(tight.svg)
     gap = min(math.dist(p, q) for a, b in itertools.combinations(inks, 2) for p in a for q in b)
     assert gap > 0.5 * 26  # inks never closer than half a bond (26 drawing units)
-    again = draw_grid(SMILES, NAMES, format="print", squeeze=mode, number=True)
+    again = draw_grid(smiles, format="print", squeeze=mode, number=True)
     assert again.svg == tight.svg  # deterministic
 
 
 @pytest.mark.parametrize("fmt, max_in", [("print", 247 / 25.4), ("slide", 13 * 9 / 16)])
 @pytest.mark.parametrize("mode", [False, "grid", "rows", "free"])
 def test_page_height_cap(tmp_path, fmt, max_in, mode):
-    pool = [s for fam in FAMILIES for s, _ in fam] + [s for s, _ in SINGLES]
-    grid = draw_grid(pool, format=fmt, squeeze=mode)
+    pool = [s for s, _ in POOL] * 2  # 70 molecules: more than one page in every mode
+    grid = draw_grid(pool, format=fmt, squeeze=mode, size="large")
     assert len(grid.pages) > 1
     heights = [float(re.search(r"height='([\d.]+)pt'", p).group(1)) / 72 for p in grid.pages]
     assert max(heights) <= max_in + 0.01

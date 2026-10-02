@@ -8,7 +8,7 @@ from rdkit import Chem
 from rdkit.Chem import rdCoordGen
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from molecule_grids import draw_grid
+from molecule_grids import FORMATS, draw_grid
 from molecule_grids.depict import acs
 from molecule_grids.depict.draw import condense, draw_one, stereo_hs
 
@@ -77,13 +77,15 @@ cap, gap = acs.probe(acs.BASE_FONT_SIZE, acs.LABEL_PADDING)
 row("atom label size", cap / acs.cap_height_em() * ACS["bond"], ACS["label"])
 row("label margin", gap * ACS["bond"], ACS["margin"])
 
-# page: a small molecule at full print width is capped at the ACS bond length
-page = draw_grid(["CCCC"], ["Butane"], format="print", width=1.0).svg
-wpt = float(re.search(r"width='([\d.]+)pt'", page).group(1))
-vbw = float(re.search(r"viewBox='0 0 ([\d.]+)", page).group(1))
-row("bond length (placed at 100 %)", drawn_bond(page) * wpt / vbw, ACS["bond"])
-row("caption size", float(re.search(r"font-size='([\d.]+)'", page).group(1)) * wpt / vbw, ACS["caption"])
+# page: at each size, labels follow stylia and bonds keep ACS proportions (bond = 1.44 x label)
+for size in ("small", "medium", "large"):
+    label = FORMATS["print"].label_pt[size]
+    page = draw_grid(["CCCC"], ["Butane"], format="print", size=size).svg
+    wpt = float(re.search(r"width='([\d.]+)pt'", page).group(1))
+    vbw = float(re.search(r"viewBox='0 0 ([\d.]+)", page).group(1))
+    row(f"{size}: bond (placed at 100 %)", drawn_bond(page) * wpt / vbw, label * ACS["bond"] / ACS["label"])
+    row(f"{size}: caption size", float(re.search(r"font-size='([\d.]+)'", page).group(1)) * wpt / vbw, label)
 
-print(f"{'metric':32s}{'rendered':>10s}{'ACS 1996':>10s}{'diff':>8s}")
+print(f"{'metric':32s}{'rendered':>10s}{'expected':>10s}{'diff':>8s}")
 for n, g, w, e in rows:
     print(f"{n:32s}{g:9.2f}pt{w:9.2f}pt{e:+7.1f}%")

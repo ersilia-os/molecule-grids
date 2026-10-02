@@ -162,8 +162,8 @@ def draw_grid(
     """Draw molecules as a grid, squeezed to fill the figure (or in square cells).
 
     The figure width is ``width`` times the format's full width (180 mm for print,
-    330 mm for slides), as in stylia. Molecules are drawn at a fixed size, 14.4 pt bonds
-    in print (ACS) and 20 pt on slides at ``size="medium"``; the width holds as many columns
+    330 mm for slides), as in stylia. Molecules are drawn at a fixed size, with atom labels
+    and captions at stylia's font sizes; the width holds as many columns
     as fit at that size.
 
     Parameters
@@ -186,8 +186,9 @@ def draw_grid(
         Tallest figure, as a fraction of the page height (247 mm in print, 186 mm on slides),
         in (0, 1]. Molecules that do not fit go to the next page; nothing is cut.
     size : {"small", "medium", "large"}
-        Molecule size: 70, 100 or 140 % of the format's bond length (print 10, 14.4 or 20 pt;
-        slide 14, 20 or 28 pt). If the largest molecule would not fit the width even in one
+        Molecule size, set by the atom label and caption size, which follows stylia: print
+        5, 6 or 8 pt; slides 8, 10 or 13 pt. Bonds are 1.44 x that (ChemDraw ACS proportions;
+        print medium is 8.6 pt). If the largest molecule would not fit the width even in one
         column, it is shrunk to fit (see ``Grid.bond_pt``).
     number : bool
         Replace captions with bold compound numbers 1, 2, 3... in reading order.
@@ -222,7 +223,7 @@ def draw_grid(
         raise ValueError(f"style must be one of {list(STYLES)}, not {style!r}")
     if size not in sizing.SIZES:
         raise ValueError(f"size must be one of {list(sizing.SIZES)}, not {size!r}")
-    factor = sizing.SIZES[size]
+    bond_pt = fmt.label_pt[size] / acs.LABEL_RATIO  # ACS: label 10 pt on a 14.4 pt bond
     molecules = list(molecules)
     if not molecules:
         raise ValueError("no molecules to draw")
@@ -235,16 +236,16 @@ def draw_grid(
     mols, buckets = prepare(_to_mols(molecules))
     drawn = [draw_one(m, style) for m in mols]
     bold = [bool(COMPOUND_NUMBER.match(n)) for n in names]
-    caption = (acs.LABEL_RATIO if style == "medicinal" else computational.CAPTION_RATIO) * acs.BOND
+    caption = acs.LABEL_RATIO * acs.BOND  # captions match the atom labels, in both styles
     capw = [text_width(n, caption, b) if n else 0.0 for n, b in zip(names, bold)]
     wide = [max(d[3], c) for d, c in zip(drawn, capw)]  # width each molecule needs
     sides = sorted(max(w, d[4]) for w, d in zip(wide, drawn))
     typical = sides[math.ceil(TYPICAL * len(sides)) - 1]  # cell side that fits most molecules
-    geo = sizing.solve(fmt, width, factor, max(wide), typical, caption)
-    if geo.bond_pt < fmt.bond_pt * factor - 1e-6:
+    geo = sizing.solve(fmt, width, bond_pt, max(wide), typical, caption)
+    if geo.bond_pt < bond_pt - 1e-6:
         logger.warning(
             f"The largest molecule does not fit width={width} at size={size!r}; "
-            f"drawn at {geo.bond_pt:.1f} pt bonds instead of {fmt.bond_pt * factor:.1f}"
+            f"drawn at {geo.bond_pt:.1f} pt bonds instead of {bond_pt:.1f}"
         )
     columns = geo.columns
     max_h = max_height * fmt.max_height_in * sizing.PT_PER_IN / geo.scale  # tallest page, in drawing units
