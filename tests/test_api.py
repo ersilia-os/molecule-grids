@@ -1,3 +1,5 @@
+import itertools
+import math
 import re
 
 import pytest
@@ -49,14 +51,30 @@ def test_frame():
     assert "stroke='#000'" in draw_grid(["CCO"], frame=True).svg
 
 
-def test_squeeze():
+def ink_points(svg):
+    """Absolute ink points of each molecule in a grid SVG."""
+    groups = re.findall(r"<g transform='translate\(([\d.-]+),([\d.-]+)\)'>(.*?)</g>", svg, re.DOTALL)
+    out = []
+    for tx, ty, inner in groups:
+        v = [float(t) for d in re.findall(r" d='([^']+)'", inner) for t in re.findall(r"-?\d+\.?\d*", d)]
+        out.append([(x + float(tx), y + float(ty)) for x, y in zip(v[0::2], v[1::2])])
+    return out
+
+
+@pytest.mark.parametrize("mode", [True, "rows", "free"])
+def test_squeeze(mode):
     square = draw_grid(SMILES, NAMES, format="print", columns=4)
-    tight = draw_grid(SMILES, NAMES, format="print", columns=4, squeeze=True, number=True)
+    tight = draw_grid(SMILES, NAMES, format="print", columns=4, squeeze=mode, number=True)
     assert tight.bond_pt == square.bond_pt
-    assert square.columns == 4 and 1 <= tight.columns <= 4
+    assert tight.width_in <= square.width_in + 1e-6
     assert tight.width_in * tight.height_in < square.width_in * square.height_in
     assert sorted(tight.order) == list(range(len(SMILES)))
     assert [tight.names[i] for i in tight.order] == [str(k + 1) for k in range(len(SMILES))]
+    inks = ink_points(tight.svg)
+    gap = min(math.dist(p, q) for a, b in itertools.combinations(inks, 2) for p in a for q in b)
+    assert gap > 0.5 * 26  # inks never closer than half a bond (26 drawing units)
+    again = draw_grid(SMILES, NAMES, format="print", columns=4, squeeze=mode, number=True)
+    assert again.svg == tight.svg  # deterministic
 
 
 def test_errors():

@@ -1,16 +1,15 @@
 """Molecule grids: the main entry point of the package."""
 
 import html
-import math
 import re
-from collections import Counter
 from pathlib import Path
 
 from rdkit import Chem, RDLogger
 
 from molecule_grids import sizing
 from molecule_grids.depict import acs, slide
-from molecule_grids.depict.draw import draw_one, text_width
+from molecule_grids.depict.draw import draw_one, ink_mask, rotate, text_width
+from molecule_grids.layout import pack
 from molecule_grids.layout.scaffold import arrange, prepare
 from molecule_grids.utils.logging import logger
 
@@ -19,7 +18,7 @@ COMPOUND_NUMBER = re.compile(r"^\d+[a-z]{0,2}$")
 
 MAX_COLUMNS = 30
 MAX_MOLECULES = 100  # per figure; more are split into GIF frames
-SQUEEZE_TOLERANCE = 0.10  # squeeze keeps more columns unless fewer save over 10 % of the area
+SQUEEZE = {False: None, None: None, True: "grid", "grid": "grid", "rows": "rows", "free": "free"}
 
 
 class TooManyMolecules(ValueError):
@@ -39,8 +38,9 @@ class Grid:
         Caption of each molecule, in input order.
     order : list of int
         Input indices in reading order (left to right, top to bottom, page by page).
-    columns : int
-        Number of columns (with ``squeeze``, possibly fewer than requested).
+    columns : int or None
+        Number of columns (when squeezing, possibly fewer than requested; None for
+        ``squeeze="free"``).
     max_columns : int
         Most columns that keep atom labels legible at this width, for these molecules.
     capacity : int
@@ -154,7 +154,7 @@ def draw_grid(
     frame=False,
     squeeze=False,
 ):
-    """Draw molecules as a grid of square cells (or a tight grid with ``squeeze``).
+    """Draw molecules as a grid of square cells, or squeezed to fill the figure.
 
     The figure width is ``width`` times the format's full width (7.09 in for print,
     13 in for slides), as in stylia. All molecules share one bond length: the largest
@@ -178,14 +178,16 @@ def draw_grid(
         Replace captions with bold compound numbers 1, 2, 3... in reading order.
     group : bool
         Place analogues that share a scaffold side by side. They share one orientation
-        regardless. Ignored when ``squeeze`` is true.
+        regardless. Ignored when squeezing.
     frame : bool
         Draw a thin black outline around the whole figure, in the format's bond line width.
-    squeeze : bool
-        Drop the square cells: each column is as wide as its widest molecule and each row
-        as tall as its tallest, with molecules reordered to fill the figure. Same bond
-        length; fewer columns are used if that saves over 10 % of the area. The figure comes
-        out narrower than ``width``.
+    squeeze : bool or {"grid", "rows", "free"}
+        Drop the square cells and reorder (and turn by quarter turns) molecules to fill the
+        figure, at the same bond length; the figure comes out smaller than ``width``.
+        Analogues sharing a scaffold turn together. ``"grid"`` (or True): aligned columns
+        and rows fitted to their largest molecule; fewer columns only if that saves over
+        10 % of the area. ``"rows"``: rows flow like justified text. ``"free"``: molecules
+        interlock by their outlines.
 
     Returns
     -------
@@ -232,29 +234,47 @@ def draw_grid(
         )
     geo = solve(columns)
     max_rows = max(1, MAX_MOLECULES // columns)
-    if squeeze:
-        chunks = [
-            list(range(k, min(k + columns * max_rows, len(mols)))) for k in range(0, len(mols), columns * max_rows)
-        ]
-        layouts = [_tight_layout(geo, drawn, names, bold, idx, columns) for idx in chunks]
+    variants = {(i, 0): d for i, d in enumerate(drawn)}
+
+    def get(i, r):
+        """Drawing of molecule ``i`` turned ``r`` quarter turns (drawn on first use)."""
+        if (i, r) not in variants:
+            variants[i, r] = draw_one(rotate(mols[i], r), fmt.name)
+        return variants[i, r]
+
+    mode = SQUEEZE.get(squeeze, "bad") if isinstance(squeeze, (bool, str, type(None))) else "bad"
+    if mode == "bad":
+        raise ValueError(f"squeeze must be False, True, 'grid', 'rows' or 'free', not {squeeze!r}")
+    if mode:
+        group = {i: idxs[0] for key, idxs in buckets.items() if len(idxs) > 1 and key != "(acyclic)" for i in idxs}
+        group = [group.get(i, i) for i in range(len(mols))]
+        capw = [text_width(n, geo.caption, b) if n else 0.0 for n, b in zip(names, bold)]
+        size = columns * max_rows
+        chunks = [list(range(k, min(k + size, len(mols)))) for k in range(0, len(mols), size)]
+        squeezer = {"grid": _grid_layout, "rows": _rows_layout, "free": _free_layout}[mode]
+        layouts = [squeezer(geo, get, idx, columns, capw, group) for idx in chunks]
     else:
         rows = arrange(buckets, len(mols), columns, group)
         layouts = [_square_layout(geo, drawn, rows[p : p + max_rows]) for p in range(0, len(rows), max_rows)]
         if len(layouts) > 1:  # GIF frames share the canvas of a full page
-            layouts = [(W, geo.page_height(max_rows), place) for W, _, place in layouts]
-    order = [i for _, _, place in layouts for i, *_ in place]
+            layouts = [(W, geo.page_height(max_rows), place, c) for W, _, place, c in layouts]
+    order = [i for _, _, place, _ in layouts for i, *_ in place]
     if number:  # numbers follow reading order
         names = [None] * len(order)
         for k, i in enumerate(order):
             names[i] = str(k + 1)
     line = acs.BOND * (acs.LINE_RATIO if fmt.name == "print" else slide.LINE_RATIO)
-    pages = _render(geo, layouts, drawn, names, bold, line if frame else None)
-    used = max(Counter(round(b, 2) for *_, b in place).most_common(1)[0][1] for _, _, place in layouts)  # per row
+    pages = _render(geo, layouts, get, names, bold, line if frame else None)
+    used = None if mode == "free" else max(c for *_, c in layouts)
     return Grid(fmt, names, order, geo, used, max_columns, columns * max_rows, pages)
 
 
+# Layouts return (W, H, [(i, r, cx, cy, baseline)], columns): figure size, and per molecule its
+# quarter turns, ink centre and caption baseline, in reading order.
+
+
 def _square_layout(geo, drawn, rows):
-    """Square cells of equal size; returns ``(W, H, [(i, cx, cy, baseline)])``."""
+    """Square cells of equal size."""
     W, gap, cell = geo.width, geo.gap, geo.cell
     place, y = [], gap
     for r in rows:
@@ -262,50 +282,97 @@ def _square_layout(geo, drawn, rows):
         x = (W - (len(r) * cell + (len(r) - 1) * gap)) / 2  # centre partial rows
         for i in r:
             cy = y + cell / 2
-            place.append((i, x + cell / 2, cy, cy + rh / 2 + geo.caption_base))  # shared caption baseline
+            place.append((i, 0, x + cell / 2, cy, cy + rh / 2 + geo.caption_base))  # shared caption baseline
             x += cell + gap
         y += geo.row_pitch
-    return W, geo.page_height(len(rows)), place
+    return W, geo.page_height(len(rows)), place, max(map(len, rows))
 
 
-def _tight_layout(geo, drawn, names, bold, idx, columns):
-    """Aligned grid with each column as wide as its widest molecule and each row as tall as its
-    tallest. Tries every column count up to ``columns`` and two orderings, and keeps the
-    smallest (fullest) figure; dropping columns must save more than ``SQUEEZE_TOLERANCE`` of the area. Returns ``(W, H, [(i, cx, cy, baseline)])``."""
-    gap, strip = geo.gap, geo.caption_base + 0.3 * geo.caption
-    cw = {i: max(drawn[i][3], text_width(names[i], geo.caption, bold[i]) if names[i] else 0) for i in idx}
-    ch = {i: drawn[i][4] for i in idx}
-    by_width = sorted(idx, key=lambda i: -cw[i])  # similar widths share a column
-    by_height = sorted(idx, key=lambda i: -ch[i])  # similar heights share a row
+def _strip(geo):
+    return geo.caption_base + 0.3 * geo.caption  # caption band under each row
 
-    def candidates(C):
-        R = math.ceil(len(idx) / C)
-        cols = [sorted(by_width[c * R : (c + 1) * R], key=lambda i: -ch[i]) for c in range(C)]
-        yield [[col[r] for col in cols if r < len(col)] for r in range(R)]
-        yield [sorted(by_height[r * C : (r + 1) * C], key=lambda i: -cw[i]) for r in range(R)]
 
-    def size(grid):
-        colw = [max(cw[row[c]] for row in grid if c < len(row)) for c in range(max(map(len, grid)))]
-        rowh = [max(ch[i] for i in row) for row in grid if row]
-        return colw, rowh, (2 * gap + sum(colw) + (len(colw) - 1) * gap) * (gap + sum(h + strip + gap for h in rowh))
+def _dims(get, idx, turns):
+    return {(i, r): get(i, r)[3:5] for i in idx for r in turns}
 
-    grid = None
-    for C in range(min(columns, len(idx)), 0, -1):
-        best = min(candidates(C), key=lambda g: size(g)[2])
-        if grid is None or size(best)[2] < (1 - SQUEEZE_TOLERANCE) * size(grid)[2]:
-            grid = best  # fewer columns only when clearly fuller
-    colw, rowh, _ = size(grid)
+
+def _grid_layout(geo, get, idx, columns, capw, group):
+    """Tight aligned grid (see :func:`molecule_grids.layout.pack.grid_pack`)."""
+    gap, strip = geo.gap, _strip(geo)
+    dims = _dims(get, idx, (0, 1))
+    rows = pack.grid_pack(idx, columns, dims, capw, group, gap, strip)
+
+    def box(i, r):
+        return max(dims[i, r][0], capw[i]), dims[i, r][1]
+
+    ncol = len(rows[0])
+    colw = [max(box(i, r)[0] for row in rows for i, r in [row[c]] if i is not None) for c in range(ncol)]
     place, y = [], gap
-    for row, rh in zip((r for r in grid if r), rowh):
+    for row in rows:
+        rh = max(box(i, r)[1] for i, r in row if i is not None)
         x = gap
-        for c, i in enumerate(row):
-            place.append((i, x + colw[c] / 2, y + rh / 2, y + rh + geo.caption_base))
+        for c, (i, r) in enumerate(row):
+            if i is not None:
+                place.append((i, r, x + colw[c] / 2, y + rh / 2, y + rh + geo.caption_base))
             x += colw[c] + gap
         y += rh + strip + gap
-    return 2 * gap + sum(colw) + (len(colw) - 1) * gap, y, place
+    return gap + sum(w + gap for w in colw), y, place, ncol
 
 
-def _render(geo, layouts, drawn, names, bold, frame=None):
+def _rows_layout(geo, get, idx, columns, capw, group):
+    """Rows like justified text (see :func:`molecule_grids.layout.pack.rows_pack`)."""
+    gap, strip = geo.gap, _strip(geo)
+    dims = _dims(get, idx, (0, 1))
+    rows = pack.rows_pack(idx, geo.width, dims, capw, group, gap, strip)
+
+    def box(i, r):
+        return max(dims[i, r][0], capw[i]), dims[i, r][1]
+
+    natural = [gap + sum(box(i, r)[0] + gap for i, r in row) for row in rows]
+    W = max(natural)
+    place, y = [], gap
+    for k, row in enumerate(rows):
+        rh = max(box(i, r)[1] for i, r in row)
+        last = k == len(rows) - 1
+        if len(row) > 1 and not last:  # justify: spread the slack over the inner gaps
+            x, step = gap, gap + (W - natural[k]) / (len(row) - 1)
+        else:  # last or lone molecule: centred, natural gaps
+            x, step = (W - natural[k]) / 2 + gap, gap
+        for i, r in row:
+            bw = box(i, r)[0]
+            place.append((i, r, x + bw / 2, y + rh / 2, y + rh + geo.caption_base))
+            x += bw + step
+        y += rh + strip + gap
+    return W, y, place, max(map(len, rows))
+
+
+def _free_layout(geo, get, idx, columns, capw, group):
+    """Interlocking outlines (see :func:`molecule_grids.layout.pack.free_pack`)."""
+    gap, bond = geo.gap, acs.BOND
+    res, clearance = bond / 2, bond / 2  # mask pixel and half the minimum distance between inks
+    caption = {i: (capw[i], geo.caption_base - 0.75 * geo.caption, geo.caption_base + 0.3 * geo.caption) for i in idx}
+    masks, offset = {}, {}
+    for i in idx:
+        for r in range(4):
+            masks[i, r], *offset[i, r] = ink_mask(get(i, r), res, clearance, caption[i] if capw[i] else None)
+    placed = pack.free_pack(idx, geo.width - 2 * gap, masks, res, group)
+    items = []
+    for i, r, x, y in placed:
+        _, _, _, w, h = get(i, r)
+        left, top = x - offset[i, r][0], y - offset[i, r][1]  # ink top-left
+        items.append((i, r, left + w / 2, top + h / 2, top + h + geo.caption_base, left, top, w))
+    # Shift the content to the margins; canvas = content extent.
+    x0 = min(min(left, cx - capw[i] / 2) for i, _, cx, _, _, left, _, _ in items)
+    y0 = min(top for *_, top, _ in items)
+    x1 = max(max(left + w, cx + capw[i] / 2) for i, _, cx, _, _, left, _, w in items)
+    y1 = max(b + 0.3 * geo.caption if capw[i] else cy + get(i, r)[4] / 2 for i, r, _, cy, b, *_ in items)
+    dx, dy = gap - x0, gap - y0
+    place = [(i, r, cx + dx, cy + dy, b + dy) for i, r, cx, cy, b, *_ in items]
+    place.sort(key=lambda p: (round(p[3] / (3 * bond)), p[2]))  # reading order: bands, then left to right
+    return x1 - x0 + 2 * gap, y1 - y0 + 2 * gap, place, None
+
+
+def _render(geo, layouts, get, names, bold, frame=None):
     """Write one SVG per layout on a shared canvas; ``frame`` is the outline width, or None."""
     W, H = max(lay[0] for lay in layouts), max(lay[1] for lay in layouts)
     outline = ""
@@ -315,10 +382,10 @@ def _render(geo, layouts, drawn, names, bold, frame=None):
             f"fill='none' stroke='#000' stroke-width='{frame:.2f}'/>"
         )
     pages = []
-    for _, _, place in layouts:
+    for _, _, place, _ in layouts:
         body = []
-        for i, cx, cy, baseline in place:
-            inner, x0, y0, w, h = drawn[i]
+        for i, r, cx, cy, baseline in place:
+            inner, x0, y0, w, h = get(i, r)
             tx, ty = cx - w / 2 - x0, cy - h / 2 - y0  # ink centred on (cx, cy)
             body.append(f"<g transform='translate({tx:.2f},{ty:.2f})'>{inner}</g>")
             if names[i]:

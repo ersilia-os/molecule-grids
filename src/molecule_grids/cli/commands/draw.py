@@ -12,7 +12,14 @@ from molecule_grids import FORMATS, TooManyMolecules, draw_grid, read_molecules
 @click.option("--number", is_flag=True, help="Caption with bold compound numbers 1, 2, 3...")
 @click.option("--group", is_flag=True, help="Place analogues sharing a scaffold side by side.")
 @click.option("--frame", is_flag=True, help="Outline the whole figure.")
-@click.option("--squeeze", is_flag=True, help="Tight grid: reorder and shrink cells to fill the figure.")
+@click.option(
+    "--squeeze",
+    type=click.Choice(["grid", "rows", "free"]),
+    is_flag=False,
+    flag_value="grid",
+    default=None,
+    help="Reorder and turn molecules to fill the figure [default mode: grid].",
+)
 def draw(input, output, fmt, width, columns, number, group, frame, squeeze):
     """Draw a grid from INPUT (.smi/.txt with 'SMILES name' lines, or .csv with a smiles column)."""
     smiles, names = read_molecules(input)
@@ -28,7 +35,7 @@ def draw(input, output, fmt, width, columns, number, group, frame, squeeze):
             number=number,
             group=group,
             frame=frame,
-            squeeze=squeeze,
+            squeeze=squeeze or False,
         )
         grid.save(output)
     except (TooManyMolecules, ValueError, OSError) as e:

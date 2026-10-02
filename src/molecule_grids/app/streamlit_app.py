@@ -185,16 +185,21 @@ with st.sidebar:
         value=False,
         help="Keeps analogues with the same scaffold together, in the same orientation.",
     )
-    squeeze = st.toggle(
+    squeeze = st.segmented_control(
         "Squeeze",
-        value=False,
-        help="Drop the square cells and reorder molecules to fill the figure. Same bond length; "
-        "the figure gets narrower. Numbers follow the new order.",
+        [False, "grid", "rows", "free"],
+        default=False,
+        required=True,
+        width="stretch",
+        format_func=lambda s: {False: "Off", "grid": "Grid", "rows": "Rows", "free": "Free"}[s],
+        help="Reorder and turn molecules to fill the figure, at the same bond length; the figure "
+        "gets smaller. Grid: aligned columns fitted to their molecules. Rows: rows flow like text. "
+        "Free: molecules interlock by their outlines. Numbers follow the new order.",
     )
     frame = st.toggle("Frame", value=False, help="A thin black outline around the whole figure.")
 
     if smiles:
-        _, auto = figure(tuple(smiles), tuple(names), mode, width, None, number, group, frame, squeeze)
+        _, auto = figure(tuple(smiles), tuple(names), mode, width, None, number, group, frame, False)
         with columns_slot:
             if auto["max_columns"] > 1:
                 # The range follows width, format and molecules: at most the columns that keep
