@@ -8,7 +8,14 @@ from molecule_grids import FORMATS, TooManyMolecules, draw_grid, read_molecules
 @click.option("-o", "--output", required=True, type=click.Path(dir_okay=False), help="Output .svg, .png, .pdf or .gif.")
 @click.option("-f", "--format", "fmt", type=click.Choice(sorted(FORMATS)), default="slide", show_default=True)
 @click.option("-w", "--width", type=float, default=1.0, show_default=True, help="Fraction of the full format width.")
-@click.option("-z", "--zoom", type=float, default=1.0, show_default=True, help="Molecule size, 0.5-2 (1 is 100 %).")
+@click.option(
+    "-s",
+    "--size",
+    type=click.Choice(["small", "medium", "large"]),
+    default="medium",
+    show_default=True,
+    help="Molecule size: 70, 100 or 140 % of the standard bond.",
+)
 @click.option("--number", is_flag=True, help="Caption with bold compound numbers 1, 2, 3...")
 @click.option("--group", is_flag=True, help="Place analogues sharing a scaffold side by side.")
 @click.option("--frame", is_flag=True, help="Outline the whole figure.")
@@ -20,7 +27,7 @@ from molecule_grids import FORMATS, TooManyMolecules, draw_grid, read_molecules
     default=None,
     help="Reorder and turn molecules to fill the figure [default mode: grid].",
 )
-def draw(input, output, fmt, width, zoom, number, group, frame, squeeze):
+def draw(input, output, fmt, width, size, number, group, frame, squeeze):
     """Draw a grid from INPUT (.smi/.txt with 'SMILES name' lines, or .csv with a smiles column)."""
     smiles, names = read_molecules(input)
     if not smiles:
@@ -31,7 +38,7 @@ def draw(input, output, fmt, width, zoom, number, group, frame, squeeze):
             names,
             format=fmt,
             width=width,
-            zoom=zoom,
+            size=size,
             number=number,
             group=group,
             frame=frame,

@@ -2,7 +2,7 @@
 
 A figure's width is a fraction of the format's base width (stylia's ``SIZE``): 7.09 in
 for print (Nature two-column) and 13 in for slides. Molecules are drawn at a fixed size:
-at ``zoom=1`` the bond is 14.4 pt in print (ACS) and 20 pt on slides. The width holds as
+at ``size="medium"`` the bond is 14.4 pt in print (ACS) and 20 pt on slides. The width holds as
 many square cells as fit the largest molecule at that size, one molecule per cell, and the
 height follows from the number of rows.
 """
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from molecule_grids.depict import acs
 
 PT_PER_IN = 72.0
-ZOOM_RANGE = (0.5, 2.0)
+SIZES = {"small": 0.7, "medium": 1.0, "large": 1.4}  # molecule size, relative to medium
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class Format:
     size_in : float
         Full figure width in inches (stylia ``SIZE``).
     bond_pt : float
-        Bond length at ``zoom=1``, in pt.
+        Bond length at ``size="medium"``, in pt.
     png_dpi : int
         Resolution of PNG and GIF exports.
     """
@@ -85,7 +85,7 @@ class Geometry:
         return 2 * self.gap + rows * self.row_pitch - self.gap
 
 
-def solve(fmt, width, zoom, needed, caption):
+def solve(fmt, width, factor, needed, caption):
     """Solve the grid geometry at a fixed molecule size.
 
     Parameters
@@ -94,8 +94,8 @@ def solve(fmt, width, zoom, needed, caption):
         Output format.
     width : float
         Figure width as a fraction of ``fmt.size_in``.
-    zoom : float
-        Molecule size relative to ``fmt.bond_pt``.
+    factor : float
+        Molecule size relative to ``fmt.bond_pt`` (a value of ``SIZES``).
     needed : float
         Smallest cell side that fits every molecule and caption, in drawing units.
     caption : float
@@ -110,7 +110,7 @@ def solve(fmt, width, zoom, needed, caption):
     """
     gap = GAP * acs.BOND
     width_pt = width * fmt.size_in * PT_PER_IN
-    scale = fmt.bond_pt * zoom / acs.BOND
+    scale = fmt.bond_pt * factor / acs.BOND
     scale = min(scale, width_pt / (2 * gap + needed))  # one cell must fit
     total = width_pt / scale
     columns = max(1, int((total - gap) // (needed + gap)))

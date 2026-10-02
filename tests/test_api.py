@@ -23,12 +23,14 @@ def test_width_follows_format(fmt, full):
 
 
 @pytest.mark.parametrize("fmt, bond", [("print", 14.4), ("slide", 20.0)])
-def test_zoom_sets_size(fmt, bond):
-    for zoom in (0.5, 1.0, 2.0):
-        assert draw_grid(SMILES, format=fmt, zoom=zoom).bond_pt == pytest.approx(bond * zoom)
-    assert draw_grid(SMILES, format=fmt, zoom=0.5).columns > draw_grid(SMILES, format=fmt, zoom=2).columns
-    tiny = draw_grid(SMILES, format=fmt, width=0.1, zoom=2)  # does not fit even one column: shrunk
-    assert tiny.bond_pt < bond * 2 and tiny.columns == 1
+def test_size_presets(fmt, bond):
+    for size, factor in (("small", 0.7), ("medium", 1.0), ("large", 1.4)):
+        assert draw_grid(SMILES, format=fmt, size=size).bond_pt == pytest.approx(bond * factor)
+    assert draw_grid(SMILES, format=fmt, size="small").columns > draw_grid(SMILES, format=fmt, size="large").columns
+    tiny = draw_grid(SMILES, format=fmt, width=0.1, size="large")  # not even one column fits: shrunk
+    assert tiny.bond_pt < bond * 1.4 and tiny.columns == 1
+    with pytest.raises(ValueError, match="size"):
+        draw_grid(SMILES, size="huge")
 
 
 def test_save_types(tmp_path):

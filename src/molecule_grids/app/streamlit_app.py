@@ -22,14 +22,14 @@ EXAMPLE = examples.as_text(examples.DEFAULT)
 
 
 @st.cache_data(show_spinner="Drawing…")
-def figure(smiles, names, fmt, width, zoom, number, group, frame, squeeze):
+def figure(smiles, names, fmt, width, size, number, group, frame, squeeze):
     """Draw the grid; returns (pages, summary)."""
     grid = draw_grid(
         smiles,
         names,
         format=fmt,
         width=width,
-        zoom=zoom,
+        size=size,
         number=number,
         group=group,
         frame=frame,
@@ -177,14 +177,14 @@ with st.sidebar:
         f"{FORMATS['print'].size_in:g} in for print (as in stylia). "
         "As many columns as fit; each molecule sits in a square cell, so the height follows.",
     )
-    zoom = st.slider(
-        "Magnifier",
-        50,
-        200,
-        100,
-        10,
-        format="%d%%",
-        help="Molecule size. 100 % is a 14.4 pt bond in print (ACS) and 20 pt on slides. "
+    size = st.segmented_control(
+        "Molecule size",
+        ["small", "medium", "large"],
+        default="medium",
+        required=True,
+        width="stretch",
+        format_func=str.capitalize,
+        help="70, 100 or 140 % of the standard bond: 14.4 pt in print (ACS) and 20 pt on slides at Medium. "
         "Bigger molecules mean fewer columns.",
     )
     number = st.toggle("Number compounds 1, 2, 3…", help="Replaces names with bold numbers in input order.")
@@ -233,7 +233,7 @@ if not smiles:
         )
     st.stop()
 
-pages, info = figure(tuple(smiles), tuple(names), mode, width, zoom / 100, number, group, frame, squeeze)
+pages, info = figure(tuple(smiles), tuple(names), mode, width, size, number, group, frame, squeeze)
 if len(pages) > 1:
     with st.container(key="callout-pages"):
         st.caption(

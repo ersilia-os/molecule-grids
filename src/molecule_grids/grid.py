@@ -144,7 +144,7 @@ def draw_grid(
     names=None,
     format="slide",
     width=1.0,
-    zoom=1.0,
+    size="medium",
     number=False,
     group=False,
     frame=False,
@@ -154,7 +154,7 @@ def draw_grid(
 
     The figure width is ``width`` times the format's full width (7.09 in for print,
     13 in for slides), as in stylia. Molecules are drawn at a fixed size, 14.4 pt bonds
-    in print (ACS) and 20 pt on slides, times ``zoom``; the width holds as many columns
+    in print (ACS) and 20 pt on slides at ``size="medium"``; the width holds as many columns
     as fit at that size.
 
     Parameters
@@ -166,11 +166,12 @@ def draw_grid(
     format : {"slide", "print"}
         ``"slide"``: RDKit colours. ``"print"``: ChemDraw ACS Document 1996 style.
     width : float
-        Fraction of the format's full width, in (0, 1]. Together with ``zoom`` it sets the
+        Fraction of the format's full width, in (0, 1]. Together with ``size`` it sets the
         number of columns. Rows are added as needed.
-    zoom : float
-        Molecule size, in [0.5, 2]; 1 is 100 %. If the largest molecule would not fit the
-        width even in one column, it is shrunk to fit (see ``Grid.bond_pt``).
+    size : {"small", "medium", "large"}
+        Molecule size: 70, 100 or 140 % of the format's bond length (print 10, 14.4 or 20 pt;
+        slide 14, 20 or 28 pt). If the largest molecule would not fit the width even in one
+        column, it is shrunk to fit (see ``Grid.bond_pt``).
     number : bool
         Replace captions with bold compound numbers 1, 2, 3... in reading order.
     group : bool
@@ -193,14 +194,14 @@ def draw_grid(
     Raises
     ------
     ValueError
-        On invalid SMILES, or a width or zoom out of range.
+        On invalid SMILES, a width out of range, or an unknown size.
     """
     fmt = sizing.get_format(format)
     if not 0 < width <= 1:
         raise ValueError(f"width is a fraction of the full {fmt.name} width and must be in (0, 1], not {width}")
-    lo, hi = sizing.ZOOM_RANGE
-    if not lo <= zoom <= hi:
-        raise ValueError(f"zoom must be in [{lo}, {hi}] (1 is 100 %), not {zoom}")
+    if size not in sizing.SIZES:
+        raise ValueError(f"size must be one of {list(sizing.SIZES)}, not {size!r}")
+    factor = sizing.SIZES[size]
     molecules = list(molecules)
     if not molecules:
         raise ValueError("no molecules to draw")
@@ -216,11 +217,11 @@ def draw_grid(
     ink = max(max(d[3], d[4]) for d in drawn)
     caption = (acs.LABEL_RATIO if fmt.name == "print" else slide.CAPTION_RATIO) * acs.BOND
     needed = max(ink, max(text_width(n, caption, b) for n, b in zip(names, bold)))
-    geo = sizing.solve(fmt, width, zoom, needed, caption)
-    if geo.bond_pt < fmt.bond_pt * zoom - 1e-6:
+    geo = sizing.solve(fmt, width, factor, needed, caption)
+    if geo.bond_pt < fmt.bond_pt * factor - 1e-6:
         logger.warning(
-            f"The largest molecule does not fit width={width} at zoom={zoom}; "
-            f"drawn at {geo.bond_pt / fmt.bond_pt:.0%} instead"
+            f"The largest molecule does not fit width={width} at size={size!r}; "
+            f"drawn at {geo.bond_pt:.1f} pt bonds instead of {fmt.bond_pt * factor:.1f}"
         )
     columns = geo.columns
     max_rows = max(1, MAX_MOLECULES // columns)
