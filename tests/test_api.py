@@ -148,6 +148,16 @@ def test_auto_width_aims_at_aspect(fmt, aspect):
     assert abs(math.log(auto.width_mm / auto.height_mm / aspect)) <= min(shapes) + 0.15
 
 
+@pytest.mark.parametrize("mode", ["rows", "grid", False])
+def test_group_keeps_families_together(mode):
+    smiles = [s for s, _ in POOL]
+    grid = draw_grid(smiles, format="print", squeeze=mode, group=True)
+    where = {i: k for k, i in enumerate(grid.order)}
+    for fam in FAMILIES:
+        pos = sorted(where[smiles.index(s)] for s, _ in fam)
+        assert pos == list(range(pos[0], pos[0] + len(pos)))  # consecutive in reading order
+
+
 def test_errors():
     with pytest.raises(ValueError, match="invalid SMILES"):
         draw_grid(["CCO", "not-a-smiles"])

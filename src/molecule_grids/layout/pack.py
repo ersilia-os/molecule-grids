@@ -48,17 +48,38 @@ def _turn_group(rot, groups, rng):
     return rot
 
 
+def _blocks(idx, group):
+    """Molecules as blocks: each family (shared ``group``) together, in input order."""
+    blocks = {}
+    for i in idx:
+        blocks.setdefault(group[i], []).append(i)
+    return [tuple(b) for b in blocks.values()]
+
+
+def _move(seq, rng):
+    """Swap two items of ``seq`` or move one elsewhere."""
+    seq = list(seq)
+    if len(seq) > 1:
+        a, b = rng.sample(range(len(seq)), 2)
+        if rng.random() < 0.5:
+            seq[a], seq[b] = seq[b], seq[a]
+        else:
+            seq.insert(b, seq.pop(a))
+    return seq
+
+
 def _box(i, r, dims, capw):
     w, h = dims[i, r]
     return max(w, capw[i]), h
 
 
-def grid_pack(idx, columns, max_width, dims, capw, group, gap, strip):
+def grid_pack(idx, columns, max_width, dims, capw, group, gap, strip, together=False):
     """Tight aligned grid: column widths and row heights fit their largest molecule.
 
     Tries column counts from ``columns`` down, keeping the grid within ``max_width``, and
     keeps the one with the smallest height; fewer columns only when they save more than
-    ``TOLERANCE`` of it.
+    ``TOLERANCE`` of it. With ``together``, each family fills consecutive cells in reading
+    order (the search moves whole families).
 
     Returns
     -------
@@ -83,8 +104,17 @@ def grid_pack(idx, columns, max_width, dims, capw, group, gap, strip):
         height = gap + sum(h + strip + gap for h in rowh if h > 0)
         return height + 10 * max(0.0, width - max_width)  # too wide: heavily penalised
 
+    def from_blocks(C, blocks):
+        cells = [i for b in blocks for i in b]
+        return cells + [None] * (-len(cells) % C)
+
     def neighbour(state, rng):
         C, cells, rot = state
+        if together:  # reorder whole families, then refill the cells in reading order
+            if rng.random() < 0.2:
+                return C, cells, _turn_group(rot, groups, rng)
+            order = _move(_blocks([i for i in cells if i is not None], group), rng)
+            return C, from_blocks(C, order), rot
         if rng.random() < 0.2 or len(cells) < 2:
             return C, cells, _turn_group(rot, groups, rng)
         a, b = rng.sample(range(len(cells)), 2)
@@ -98,6 +128,9 @@ def grid_pack(idx, columns, max_width, dims, capw, group, gap, strip):
         """Best of two sort-based layouts: similar widths per column, or similar heights per row."""
         R = math.ceil(n / C)
         rot = dict.fromkeys(groups, 0)
+        if together:  # families in input order, largest first
+            blocks = sorted(_blocks(idx, group), key=len, reverse=True)
+            return C, from_blocks(C, blocks), rot
         bw = sorted(idx, key=lambda i: -_box(i, 0, dims, capw)[0])
         bh = sorted(idx, key=lambda i: -dims[i, 0][1])
         a = [None] * (R * C)
@@ -120,6 +153,8 @@ def grid_pack(idx, columns, max_width, dims, capw, group, gap, strip):
     C, cells, rot = best
     rows = [[(i, None if i is None else rot[group[i]]) for i in cells[r : r + C]] for r in range(0, len(cells), C)]
     rows = [row for row in rows if any(i is not None for i, _ in row)]
+    if together:  # keep reading order, so families stay together
+        return rows
     # Drop empty columns; put fuller columns and rows first so gaps end up at the bottom right
     # (whole columns and rows move, so the area is unchanged).
     keep = [c for c in range(C) if any(row[c][0] is not None for row in rows)]
@@ -128,8 +163,10 @@ def grid_pack(idx, columns, max_width, dims, capw, group, gap, strip):
     return sorted(rows, key=lambda row: sum(i is None for i, _ in row))
 
 
-def rows_pack(idx, max_width, dims, capw, group, gap, strip):
+def rows_pack(idx, max_width, dims, capw, group, gap, strip, together=False):
     """Rows like text: molecules flow left to right at their own widths, up to ``max_width``.
+
+    With ``together``, each family stays consecutive (the search moves whole families).
 
     Returns
     -------
@@ -142,7 +179,7 @@ def rows_pack(idx, max_width, dims, capw, group, gap, strip):
     def breaks(state):
         order, rot = state
         rows, row, x = [], [], gap
-        for i in order:
+        for i in (i for block in order for i in block):
             w = _box(i, rot[group[i]], dims, capw)[0]
             if row and x + w + gap > max_width:
                 rows.append(row)
@@ -160,13 +197,7 @@ def rows_pack(idx, max_width, dims, capw, group, gap, strip):
         u = rng.random()
         if u < 0.2:
             return order, _turn_group(rot, groups, rng)
-        order = list(order)
-        a, b = rng.sample(range(len(order)), 2) if len(order) > 1 else (0, 0)
-        if u < 0.6:
-            order[a], order[b] = order[b], order[a]
-        else:
-            order.insert(b, order.pop(a))
-        return order, rot
+        return _move(order, rng), rot
 
     # Shelf start: landscape turns, tallest first (next-fit decreasing height).
     rot = {g: 0 for g in groups}
@@ -174,12 +205,13 @@ def rows_pack(idx, max_width, dims, capw, group, gap, strip):
         w, h = dims[i, 0]
         if h > w and all(group[j] != group[i] for j in idx if j != i):
             rot[group[i]] = 1
-    start = (sorted(idx, key=lambda i: -dims[i, rot[group[i]]][1]), rot)
+    blocks = _blocks(idx, group) if together else [(i,) for i in idx]
+    start = (sorted(blocks, key=lambda b: -max(dims[i, rot[group[i]]][1] for i in b)), rot)
     (order, rot), _ = _anneal(start, size, neighbour, _iterations(len(idx)), rng)
     return [[(i, rot[group[i]]) for i in row] for row in breaks((order, rot))]
 
 
-def free_pack(idx, max_width, masks, res, group):
+def free_pack(idx, max_width, masks, res, group, together=False):
     """Interlocking packing on occupancy masks, largest first, lowest fit first.
 
     Parameters
@@ -195,6 +227,8 @@ def free_pack(idx, max_width, masks, res, group):
         Drawing units per mask pixel.
     group : list
         Group id of each molecule; a group's first placement fixes its turn.
+    together : bool
+        Place each family's members one after another, so they land side by side.
 
     Returns
     -------
@@ -203,7 +237,12 @@ def free_pack(idx, max_width, masks, res, group):
     """
     width = max(int(max_width // res), max(m.shape[1] for m in masks.values()))
     occ = np.zeros((64, width), dtype=bool)
-    order = sorted(idx, key=lambda i: -int(masks[i, 0].sum()))
+    area = {i: int(masks[i, 0].sum()) for i in idx}
+    if together:  # largest families first, members back to back
+        blocks = sorted(_blocks(idx, group), key=lambda b: -sum(area[i] for i in b))
+        order = [i for b in blocks for i in sorted(b, key=lambda i: -area[i])]
+    else:
+        order = sorted(idx, key=lambda i: -area[i])
     turned, placed = {}, []
     for i in order:
         options = [turned[group[i]]] if group[i] in turned else [0, 1, 2, 3]

@@ -198,8 +198,8 @@ def draw_grid(
     number : bool
         Replace captions with bold compound numbers 1, 2, 3... in reading order.
     group : bool
-        Place analogues that share a scaffold side by side. They share one orientation
-        regardless. Ignored when squeezing.
+        Keep analogues that share a scaffold side by side, in every layout. They share one
+        orientation regardless.
     frame : bool
         Draw a thin outline around the whole figure, in the format's bond line width: black
         in print, Ersilia plum (#50285A) on slides. On by default.
@@ -274,10 +274,11 @@ def draw_grid(
     span = [geo.span(w) for w in wide]
     cells = [s * geo.cell + (s - 1) * geo.gap for s in span]  # square cell width of each molecule
     if mode:
-        group = {i: idxs[0] for key, idxs in buckets.items() if len(idxs) > 1 and key != "(acyclic)" for i in idxs}
-        group = [group.get(i, i) for i in range(len(mols))]
+        fam = {i: idxs[0] for key, idxs in buckets.items() if len(idxs) > 1 and key != "(acyclic)" for i in idxs}
+        fam = [fam.get(i, i) for i in range(len(mols))]  # family id: analogues turn (and group) together
+        together = group
         squeezer = {"grid": _grid_layout, "rows": _rows_layout, "free": _free_layout}[mode]
-        layouts = _paginate(len(mols), max_h, lambda idx: squeezer(geo, get, idx, columns, capw, group))
+        layouts = _paginate(len(mols), max_h, lambda idx: squeezer(geo, get, idx, columns, capw, fam, together))
     else:
         rows = arrange(buckets, len(mols), columns, group, span)
         layouts = _square_pages(geo, drawn, span, rows, max_h)
@@ -312,19 +313,30 @@ def draw_grid(
 def _paginate(n, max_h, build):
     """Split molecules 0..n-1, in input order, into squeezed pages no taller than ``max_h``.
 
-    Each page takes as many molecules as fit (at most ``MAX_MOLECULES``), found by bisection.
+    Each page takes about as many molecules as fit (at most ``MAX_MOLECULES``): the count is
+    estimated from the height of a trial packing and corrected in a few steps.
     """
     layouts, start = [], 0
     while start < n:
         k = min(n - start, MAX_MOLECULES)
         lay = build(list(range(start, start + k)))
         if lay[1] > max_h:
-            lo, hi, lay_lo = 1, k - 1, build([start])  # largest k that fits (lay_lo is its layout)
-            while lo < hi:
-                mid = (lo + hi + 1) // 2
-                trial = build(list(range(start, start + mid)))
-                lo, hi, lay_lo = (mid, hi, trial) if trial[1] <= max_h else (lo, mid - 1, lay_lo)
-            k, lay = lo, lay_lo
+            fit = None  # (k, layout) of the largest packing known to fit
+            for _ in range(6):
+                k = max(1, min(k - 1, int(k * max_h / lay[1]))) if lay[1] > max_h else k
+                lay = build(list(range(start, start + k)))
+                if lay[1] <= max_h:
+                    fit = (k, lay)
+                    more = min(n - start, MAX_MOLECULES, int(k * max_h / lay[1]))
+                    if more <= k:
+                        break
+                    trial = build(list(range(start, start + more)))
+                    if trial[1] <= max_h:
+                        fit = (more, trial)
+                    break
+                if k == 1:
+                    break
+            k, lay = fit or (k, lay)
         layouts.append(lay)
         start += k
     return layouts
@@ -419,11 +431,11 @@ def _dims(get, idx, turns):
     return {(i, r): get(i, r)[3:5] for i in idx for r in turns}
 
 
-def _grid_layout(geo, get, idx, columns, capw, group):
+def _grid_layout(geo, get, idx, columns, capw, group, together):
     """Tight aligned grid (see :func:`molecule_grids.layout.pack.grid_pack`)."""
     gap, strip = geo.gap, geo.strip
     dims = _dims(get, idx, (0, 1))
-    rows = pack.grid_pack(idx, 2 * columns, geo.width, dims, capw, group, gap, strip)
+    rows = pack.grid_pack(idx, 2 * columns, geo.width, dims, capw, group, gap, strip, together)
 
     def box(i, r):
         return max(dims[i, r][0], capw[i]), dims[i, r][1]
@@ -444,11 +456,11 @@ def _grid_layout(geo, get, idx, columns, capw, group):
     return gap + sum(w + gap for w in colw), y, place, ncol
 
 
-def _rows_layout(geo, get, idx, columns, capw, group):
+def _rows_layout(geo, get, idx, columns, capw, group, together):
     """Rows like justified text (see :func:`molecule_grids.layout.pack.rows_pack`)."""
     gap, strip = geo.gap, geo.strip
     dims = _dims(get, idx, (0, 1))
-    rows = pack.rows_pack(idx, geo.width, dims, capw, group, gap, strip)
+    rows = pack.rows_pack(idx, geo.width, dims, capw, group, gap, strip, together)
 
     def box(i, r):
         return max(dims[i, r][0], capw[i]), dims[i, r][1]
@@ -471,7 +483,7 @@ def _rows_layout(geo, get, idx, columns, capw, group):
     return W, y, place, max(map(len, rows))
 
 
-def _free_layout(geo, get, idx, columns, capw, group):
+def _free_layout(geo, get, idx, columns, capw, group, together):
     """Interlocking outlines (see :func:`molecule_grids.layout.pack.free_pack`)."""
     gap, bond = geo.gap, acs.BOND
     res, clearance = bond / 2, bond / 2  # mask pixel and half the minimum distance between inks
@@ -480,7 +492,7 @@ def _free_layout(geo, get, idx, columns, capw, group):
     for i in idx:
         for r in range(4):
             masks[i, r], *offset[i, r] = ink_mask(get(i, r), res, clearance, caption[i] if capw[i] else None)
-    placed = pack.free_pack(idx, geo.width - 2 * gap, masks, res, group)
+    placed = pack.free_pack(idx, geo.width - 2 * gap, masks, res, group, together)
     items = []
     for i, r, x, y in placed:
         _, _, _, w, h = get(i, r)
