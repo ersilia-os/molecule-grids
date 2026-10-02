@@ -1,5 +1,6 @@
 """Molecule grids: the main entry point of the package."""
 
+import dataclasses
 import html
 import math
 import re
@@ -38,6 +39,8 @@ class Grid:
         ``"print"`` or ``"slide"``.
     style : str
         ``"medicinal"`` or ``"computational"``.
+    width : float
+        Fraction of the full width used (the one picked, with ``width="auto"``).
     names : list of str
         Caption of each molecule, in input order.
     order : list of int
@@ -56,9 +59,10 @@ class Grid:
         One SVG document per figure. More than one only when the molecules exceed ``capacity``.
     """
 
-    def __init__(self, fmt, style, names, order, geometry, columns, capacity, pages):
+    def __init__(self, fmt, style, width, names, order, geometry, columns, capacity, pages):
         self.format = fmt.name
         self.style = style
+        self.width = width
         self._fmt = fmt
         self.names = names
         self.order = order
@@ -151,13 +155,14 @@ def draw_grid(
     names=None,
     format="slide",
     style="medicinal",
-    width=1.0,
+    width="auto",
     max_height=1.0,
     size="medium",
     number=False,
     group=False,
     frame=True,
     squeeze="rows",
+    fit=True,
 ):
     """Draw molecules as a grid, squeezed to fill the figure (or in square cells).
 
@@ -178,10 +183,10 @@ def draw_grid(
     style : {"medicinal", "computational"}
         How molecules are drawn: ``"medicinal"`` (medicinal chemist), ChemDraw ACS Document
         1996 style in black and white; ``"computational"``, RDKit colours.
-    width : float
+    width : float or "auto"
         Fraction of the format's full width, in (0, 1]. Together with ``size`` it sets the
-        number of columns. Rows are added as needed. If all molecules fit in one row, the
-        figure is only as wide as they need.
+        number of columns; rows are added as needed. ``"auto"`` (default) picks the fraction
+        whose figure is closest to a pleasing shape: 16:9 on slides, 3:2 in print.
     max_height : float
         Tallest figure, as a fraction of the page height (247 mm in print, 186 mm on slides),
         in (0, 1]. Molecules that do not fit go to the next page; nothing is cut.
@@ -204,6 +209,9 @@ def draw_grid(
         together. ``"rows"`` (default, or True): rows flow like justified text. ``"grid"``:
         aligned columns fitted to their largest molecule. ``"free"``: molecules interlock by
         their outlines. False: square cells in input order.
+    fit : bool
+        Make the figure only as wide as its content needs, up to ``width`` (default). False:
+        exactly ``width``, with the content centred.
 
     Returns
     -------
@@ -215,7 +223,7 @@ def draw_grid(
         On invalid SMILES, a width or height out of range, or an unknown size or style.
     """
     fmt = sizing.get_format(format)
-    if not 0 < width <= 1:
+    if width != "auto" and not (isinstance(width, (int, float)) and 0 < width <= 1):
         raise ValueError(f"width is a fraction of the full {fmt.name} width and must be in (0, 1], not {width}")
     if not 0 < max_height <= 1:
         raise ValueError(f"max_height is a fraction of the page height and must be in (0, 1], not {max_height}")
@@ -241,7 +249,9 @@ def draw_grid(
     wide = [max(d[3], c) for d, c in zip(drawn, capw)]  # width each molecule needs
     sides = sorted(max(w, d[4]) for w, d in zip(wide, drawn))
     typical = sides[math.ceil(TYPICAL * len(sides)) - 1]  # cell side that fits most molecules
-    geo = sizing.solve(fmt, width, bond_pt, max(wide), typical, caption)
+    if width == "auto":
+        width = _auto_width(fmt, bond_pt, wide, [d[4] for d in drawn], typical, caption, max_height, fit)
+    geo = dataclasses.replace(sizing.solve(fmt, width, bond_pt, max(wide), typical, caption), fit=fit)
     if geo.bond_pt < bond_pt - 1e-6:
         logger.warning(
             f"The largest molecule does not fit width={width} at size={size!r}; "
@@ -263,12 +273,7 @@ def draw_grid(
         raise ValueError(f"squeeze must be False, True, 'grid', 'rows' or 'free', not {squeeze!r}")
     span = [geo.span(w) for w in wide]
     cells = [s * geo.cell + (s - 1) * geo.gap for s in span]  # square cell width of each molecule
-    slots = wide if mode else cells
-    one_row = geo.gap + sum(w + geo.gap for w in slots) <= geo.width
-    one_row = one_row and geo.gap + max(d[4] for d in drawn) + geo.strip + geo.gap <= max_h
-    if one_row:
-        layouts = [_one_row(geo, drawn, slots)]  # no need for the full width
-    elif mode:
+    if mode:
         group = {i: idxs[0] for key, idxs in buckets.items() if len(idxs) > 1 and key != "(acyclic)" for i in idxs}
         group = [group.get(i, i) for i in range(len(mols))]
         squeezer = {"grid": _grid_layout, "rows": _rows_layout, "free": _free_layout}[mode]
@@ -276,6 +281,18 @@ def draw_grid(
     else:
         rows = arrange(buckets, len(mols), columns, group, span)
         layouts = _square_pages(geo, drawn, span, rows, max_h)
+
+    def slot(i, r):
+        """Width a molecule takes in its row: its cell, or (squeezed) its ink or caption."""
+        return max(get(i, r)[3], capw[i]) if mode else cells[i]
+
+    layouts = _compact(geo, layouts, slot)
+    tallest = max(lay[1] for lay in layouts)
+    if tallest > max_h + 1e-6:
+        logger.warning(
+            f"max_height={max_height} is less than the tallest molecule needs; pages are up to "
+            f"{tallest * geo.scale * sizing.MM_PER_PT:.0f} mm tall (nothing is cut)"
+        )
     order = [i for _, _, place, _ in layouts for i, *_ in place]
     if number:  # numbers follow reading order
         names = [None] * len(order)
@@ -283,13 +300,13 @@ def draw_grid(
             names[i] = str(k + 1)
     line = acs.BOND * (acs.LINE_RATIO if style == "medicinal" else computational.LINE_RATIO)  # as the bonds
     pages = _render(geo, layouts, get, names, bold, (line, FRAME_COLOR[fmt.name]) if frame else None)
-    used = None if mode == "free" and not one_row else max(c for *_, c in layouts)
+    used = None if any(c is None for *_, c in layouts) else max(c for *_, c in layouts)
     if len(layouts) > 1:  # what the first page holds
         capacity = len(layouts[0][2])
     else:  # estimate for typical molecules; a squeezed page may hold more
         capacity = min(MAX_MOLECULES, columns * full_rows)
         capacity = max(capacity, len(mols)) if mode else capacity
-    return Grid(fmt, style, names, order, geo, used, capacity, pages)
+    return Grid(fmt, style, width, names, order, geo, used, capacity, pages)
 
 
 def _paginate(n, max_h, build):
@@ -317,6 +334,34 @@ def _paginate(n, max_h, build):
 # quarter turns, ink centre and caption baseline, in reading order.
 
 
+def _auto_width(fmt, bond_pt, wide, tall, typical, caption, max_height, fit):
+    """Width fraction (25 to 100 %, in 5 % steps) whose figure is closest to ``fmt.aspect``.
+
+    Each candidate is estimated by filling rows with the molecules in order, which is quick
+    and close to the real layouts; ties go to the wider figure.
+    """
+    best = None
+    for k in range(20, 4, -1):
+        width = k / 20
+        geo = sizing.solve(fmt, width, bond_pt, max(wide), typical, caption)
+        gap, strip = geo.gap, geo.strip
+        max_h = max_height * fmt.max_height_in * sizing.PT_PER_IN / geo.scale
+        rows, row, x = [], [], gap
+        for w, h in zip(wide, tall):
+            if row and x + w + gap > geo.width:
+                rows.append((x, row))
+                row, x = [], gap
+            row.append(h)
+            x += w + gap
+        rows.append((x, row))
+        W = max(x for x, _ in rows) if fit else geo.width
+        H = min(max_h, gap + sum(max(r) + strip + gap for _, r in rows))
+        score = abs(math.log(W / H / fmt.aspect))
+        if best is None or score < best[0] - 1e-9:
+            best = (score, width)
+    return best[1]
+
+
 def _square_pages(geo, drawn, span, rows, max_h):
     """Square cells on aligned columns, split into pages no taller than ``max_h``.
 
@@ -324,6 +369,9 @@ def _square_pages(geo, drawn, span, rows, max_h):
     tall as its tallest molecule.
     """
     W, gap, pitch = geo.width, geo.gap, geo.pitch
+    if geo.fit:  # cells just large enough; the figure as wide as the widest row
+        pitch = geo.cell + gap
+        W = gap + max(sum(span[i] for i in r) for r in rows) * pitch
     layouts, place, y, count, used = [], [], gap, 0, 0
     for r in rows:
         rh = max(drawn[i][4] for i in r)  # each row is as tall as its tallest molecule
@@ -343,16 +391,28 @@ def _square_pages(geo, drawn, span, rows, max_h):
     return layouts
 
 
-def _one_row(geo, drawn, slots):
-    """All molecules in one row, in input order, each in a slot ``slots[i]`` wide; the figure
-    is only as wide as the row."""
-    gap = geo.gap
-    rh = max(d[4] for d in drawn)
-    place, x = [], gap
-    for i, w in enumerate(slots):
-        place.append((i, 0, x + w / 2, gap + rh / 2, gap + rh + geo.caption_base))
-        x += w + gap
-    return x, gap + rh + geo.strip + gap, place, len(slots)
+def _compact(geo, layouts, slot):
+    """Pack single-row pages tightly and give all pages one width.
+
+    A page holding a single row is re-packed without spread-out cells. With ``geo.fit``,
+    pages are as wide as the widest page's content needs; otherwise exactly ``geo.width``.
+    Each page's content is centred in that width.
+    """
+    gap, out = geo.gap, []
+    for W, H, place, cols in layouts:
+        if len({round(b, 1) for *_, b in place}) == 1:  # one row: pack it tightly
+            row = sorted(place, key=lambda p: p[2])
+            x, packed = gap, []
+            for i, r, _, cy, b in row:
+                packed.append((i, r, x + slot(i, r) / 2, cy, b))
+                x += slot(i, r) + gap
+            W, place, cols = x, packed, len(row)
+        out.append((W, H, place, cols))
+    common = max(W for W, *_ in out) if geo.fit else geo.width
+    return [
+        (common, H, [(i, r, cx + (common - W) / 2, cy, b) for i, r, cx, cy, b in place], cols)
+        for W, H, place, cols in out
+    ]
 
 
 def _dims(get, idx, turns):
@@ -370,8 +430,8 @@ def _grid_layout(geo, get, idx, columns, capw, group):
 
     ncol = len(rows[0])
     colw = [max(box(i, r)[0] for row in rows for i, r in [row[c]] if i is not None) for c in range(ncol)]
-    spare = max(0.0, geo.width - (gap + sum(w + gap for w in colw)))
-    colw = [w + spare / ncol for w in colw]  # full width: spare shared by the columns
+    spare = 0.0 if geo.fit else max(0.0, geo.width - (gap + sum(w + gap for w in colw)))
+    colw = [w + spare / ncol for w in colw]  # not fitting: the spare width is shared by the columns
     place, y = [], gap
     for row in rows:
         rh = max(box(i, r)[1] for i, r in row if i is not None)
@@ -381,7 +441,7 @@ def _grid_layout(geo, get, idx, columns, capw, group):
                 place.append((i, r, x + colw[c] / 2, y + rh / 2, y + rh + geo.caption_base))
             x += colw[c] + gap
         y += rh + strip + gap
-    return geo.width, y, place, ncol
+    return gap + sum(w + gap for w in colw), y, place, ncol
 
 
 def _rows_layout(geo, get, idx, columns, capw, group):
@@ -394,7 +454,7 @@ def _rows_layout(geo, get, idx, columns, capw, group):
         return max(dims[i, r][0], capw[i]), dims[i, r][1]
 
     natural = [gap + sum(box(i, r)[0] + gap for i, r in row) for row in rows]
-    W = geo.width
+    W = max(natural) if geo.fit else geo.width  # rows are justified to this width
     place, y = [], gap
     for k, row in enumerate(rows):
         rh = max(box(i, r)[1] for i, r in row)
@@ -426,15 +486,16 @@ def _free_layout(geo, get, idx, columns, capw, group):
         _, _, _, w, h = get(i, r)
         left, top = x - offset[i, r][0], y - offset[i, r][1]  # ink top-left
         items.append((i, r, left + w / 2, top + h / 2, top + h + geo.caption_base, left, top, w))
-    # Centre the content across the full width; the height is the content's.
+    # Fit: the width is the content's; otherwise centre it across the full width.
     x0 = min(min(left, cx - capw[i] / 2) for i, _, cx, _, _, left, _, _ in items)
     y0 = min(top for *_, top, _ in items)
     x1 = max(max(left + w, cx + capw[i] / 2) for i, _, cx, _, _, left, _, w in items)
     y1 = max(b + 0.3 * geo.caption if capw[i] else cy + get(i, r)[4] / 2 for i, r, _, cy, b, *_ in items)
-    dx, dy = (geo.width - (x1 - x0)) / 2 - x0, gap - y0
+    W = x1 - x0 + 2 * gap if geo.fit else geo.width
+    dx, dy = (W - (x1 - x0)) / 2 - x0, gap - y0
     place = [(i, r, cx + dx, cy + dy, b + dy) for i, r, cx, cy, b, *_ in items]
     place.sort(key=lambda p: (round(p[3] / (3 * bond)), p[2]))  # reading order: bands, then left to right
-    return geo.width, y1 - y0 + 2 * gap, place, None
+    return W, y1 - y0 + 2 * gap, place, None
 
 
 def _render(geo, layouts, get, names, bold, frame=None):

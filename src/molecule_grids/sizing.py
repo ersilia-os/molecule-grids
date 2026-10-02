@@ -36,6 +36,8 @@ class Format:
         ``FONTSIZE`` and ``FONTSIZE_BIG``).
     max_height_in : float
         Tallest figure, in inches; taller grids are split into pages.
+    aspect : float
+        Width / height that ``width="auto"`` aims for.
     png_dpi : int
         Resolution of PNG exports.
     """
@@ -44,14 +46,15 @@ class Format:
     size_in: float
     label_pt: dict
     max_height_in: float
+    aspect: float
     png_dpi: int
 
 
 FORMATS = {
     # Nature two-column width and page height; stylia print font sizes.
-    "print": Format("print", 7.09, dict(zip(SIZES, (5, 6, 8))), 247 / 25.4, 300),
+    "print": Format("print", 7.09, dict(zip(SIZES, (5, 6, 8))), 247 / 25.4, 3 / 2, 300),
     # Wide 16:9 slide; stylia slide font sizes.
-    "slide": Format("slide", 13.0, dict(zip(SIZES, (8, 10, 13))), 13.0 * 9 / 16, 150),
+    "slide": Format("slide", 13.0, dict(zip(SIZES, (8, 10, 13))), 13.0 * 9 / 16, 16 / 9, 150),
 }
 
 GAP = 1.6  # gap between cells and page margin, in bond lengths
@@ -74,7 +77,8 @@ class Geometry:
     pitch: float  # column pitch (cell plus its share of the spare width and gaps)
     caption: float  # caption font size
     scale: float  # pt per drawing unit
-    width: float  # figure width
+    width: float  # figure width (the most it may take)
+    fit: bool = True  # narrow the figure to its content
 
     @property
     def gap(self):

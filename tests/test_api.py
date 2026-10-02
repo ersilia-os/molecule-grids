@@ -19,8 +19,10 @@ def width_in(svg):
 @pytest.mark.parametrize("fmt, full", [("print", 7.09), ("slide", 13.0)])
 def test_width_follows_format(fmt, full):
     for w in (1.0, 0.5):
-        grid = draw_grid([s for s, _ in POOL], format=fmt, width=w)
-        assert width_in(grid.pages[0]) == pytest.approx(w * full, abs=0.01)
+        grid = draw_grid([s for s, _ in POOL], format=fmt, width=w, fit=False)
+        assert width_in(grid.pages[0]) == pytest.approx(w * full, abs=0.01)  # exactly the width
+        fitted = draw_grid([s for s, _ in POOL], format=fmt, width=w)
+        assert width_in(fitted.pages[0]) <= w * full + 0.01  # never wider
 
 
 @pytest.mark.parametrize("fmt, labels", [("print", (5, 6, 8)), ("slide", (8, 10, 13))])
@@ -31,7 +33,7 @@ def test_size_presets(fmt, labels):
         size_pt = float(re.search(r"font-size='([\d.]+)'", grid.pages[0]).group(1)) * grid.bond_pt / 26
         assert size_pt == pytest.approx(label, abs=0.05)  # captions match the labels
     bond = labels[2] * 1.44
-    small, large = (draw_grid(SMILES, format=fmt, size=s, squeeze=False) for s in ("small", "large"))
+    small, large = (draw_grid(SMILES, format=fmt, width=1, size=s, squeeze=False) for s in ("small", "large"))
     assert small.columns > large.columns
     tiny = draw_grid(SMILES, format=fmt, width=0.1, size="large")  # not even one column fits: shrunk
     assert tiny.bond_pt < bond and tiny.columns == 1
@@ -88,17 +90,19 @@ def ink_points(svg):
 @pytest.mark.parametrize("mode", [True, "rows", "free"])
 def test_squeeze(mode):
     smiles = [s for s, _ in POOL[:20]]
-    square = draw_grid(smiles, format="print", squeeze=False)
-    tight = draw_grid(smiles, format="print", squeeze=mode, number=True)
+    square = draw_grid(smiles, format="print", width=1, squeeze=False)
+    tight = draw_grid(smiles, format="print", width=1, squeeze=mode, number=True)
     assert tight.bond_pt == square.bond_pt
-    assert tight.width_mm == pytest.approx(square.width_mm)  # the width never changes
-    assert tight.height_mm < square.height_mm
+    assert tight.width_mm <= 180.1 + 0.01  # fitted, never wider than the 180 mm asked for
+    assert tight.width_mm * tight.height_mm < square.width_mm * square.height_mm
+    exact = draw_grid(smiles, format="print", width=1, squeeze=mode, fit=False)
+    assert exact.width_mm == pytest.approx(180.1, abs=0.2)  # fit=False keeps the width
     assert sorted(tight.order) == list(range(len(smiles)))
     assert [tight.names[i] for i in tight.order] == [str(k + 1) for k in range(len(smiles))]
     inks = ink_points(tight.svg)
     gap = min(math.dist(p, q) for a, b in itertools.combinations(inks, 2) for p in a for q in b)
     assert gap > 0.5 * 26  # inks never closer than half a bond (26 drawing units)
-    again = draw_grid(smiles, format="print", squeeze=mode, number=True)
+    again = draw_grid(smiles, format="print", width=1, squeeze=mode, number=True)
     assert again.svg == tight.svg  # deterministic
 
 
@@ -130,6 +134,18 @@ def test_max_height_paginates():
     assert max(heights_mm) <= 0.4 * 247 + 0.5
     with pytest.raises(ValueError, match="max_height"):
         draw_grid(["CCO"], max_height=0)
+
+
+@pytest.mark.parametrize("fmt, aspect", [("print", 3 / 2), ("slide", 16 / 9)])
+def test_auto_width_aims_at_aspect(fmt, aspect):
+    smiles = [s for s, _ in POOL[:20]]
+    auto = draw_grid(smiles, format=fmt)
+    assert 0.25 <= auto.width <= 1
+    shapes = [
+        abs(math.log(g.width_mm / g.height_mm / aspect))
+        for g in (draw_grid(smiles, format=fmt, width=w) for w in (0.25, 1.0))
+    ]
+    assert abs(math.log(auto.width_mm / auto.height_mm / aspect)) <= min(shapes) + 0.15
 
 
 def test_errors():
