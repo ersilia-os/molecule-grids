@@ -39,10 +39,8 @@ class Grid:
     order : list of int
         Input indices in reading order (left to right, top to bottom, page by page).
     columns : int or None
-        Number of columns (when squeezing, possibly fewer than requested; None for
+        Number of columns, set by the width (when squeezing, possibly fewer; None for
         ``squeeze="free"``).
-    max_columns : int
-        Most columns that keep atom labels legible at this width, for these molecules.
     capacity : int
         Most molecules in one figure (``MAX_MOLECULES``, rounded down to whole rows).
     bond_pt : float
@@ -53,13 +51,12 @@ class Grid:
         One SVG document per figure. More than one only when the molecules exceed ``capacity``.
     """
 
-    def __init__(self, fmt, names, order, geometry, columns, max_columns, capacity, pages):
+    def __init__(self, fmt, names, order, geometry, columns, capacity, pages):
         self.format = fmt.name
         self._fmt = fmt
         self.names = names
         self.order = order
         self.columns = columns
-        self.max_columns = max_columns
         self.capacity = capacity
         self.bond_pt = geometry.bond_pt
         self.width_in, self.height_in = (
@@ -148,7 +145,6 @@ def draw_grid(
     names=None,
     format="slide",
     width=1.0,
-    columns=None,
     number=False,
     group=False,
     frame=False,
@@ -170,10 +166,9 @@ def draw_grid(
     format : {"slide", "print"}
         ``"slide"``: RDKit colours. ``"print"``: ChemDraw ACS Document 1996 style.
     width : float
-        Fraction of the format's full width, in (0, 1].
-    columns : int, optional
-        Number of columns. Defaults to a sensible number for the width. Rows are added as
-        needed.
+        Fraction of the format's full width, in (0, 1]. It sets the number of columns:
+        about one per 1.75 in (print) or 1.9 in (slide), no more than keep atom labels
+        legible. Rows are added as needed.
     number : bool
         Replace captions with bold compound numbers 1, 2, 3... in reading order.
     group : bool
@@ -196,7 +191,7 @@ def draw_grid(
     Raises
     ------
     ValueError
-        On invalid SMILES, a width outside (0, 1], or more columns than ``max_columns``.
+        On invalid SMILES or a width outside (0, 1].
     """
     fmt = sizing.get_format(format)
     if not 0 < width <= 1:
@@ -222,16 +217,9 @@ def draw_grid(
     def solve(c):
         return sizing.solve(fmt, width, c, ink, caption_widths, ratio)
 
-    max_columns = next((c for c in range(MAX_COLUMNS, 0, -1) if solve(c).bond_pt >= fmt.min_bond_pt), 1)
-    if columns is None:
-        target = round(width * fmt.size_in / fmt.target_cell_in)
-        columns = max(1, min(target, max_columns, len(molecules)))
-    elif not 1 <= columns <= max_columns:
-        raise ValueError(
-            f"{columns} columns do not fit: at width={width} ({width * fmt.size_in:.2f} in) at most "
-            f"{max_columns} keep atom labels at {fmt.min_label_pt:g} pt or larger. "
-            f"Use fewer columns or a larger width."
-        )
+    max_columns = next((c for c in range(MAX_COLUMNS, 0, -1) if solve(c).bond_pt >= fmt.min_bond_pt), 1)  # legible
+    target = round(width * fmt.size_in / fmt.target_cell_in)
+    columns = max(1, min(target, max_columns, len(molecules)))
     geo = solve(columns)
     max_rows = max(1, MAX_MOLECULES // columns)
     variants = {(i, 0): d for i, d in enumerate(drawn)}
@@ -266,7 +254,7 @@ def draw_grid(
     line = acs.BOND * (acs.LINE_RATIO if fmt.name == "print" else slide.LINE_RATIO)
     pages = _render(geo, layouts, get, names, bold, line if frame else None)
     used = None if mode == "free" else max(c for *_, c in layouts)
-    return Grid(fmt, names, order, geo, used, max_columns, columns * max_rows, pages)
+    return Grid(fmt, names, order, geo, used, columns * max_rows, pages)
 
 
 # Layouts return (W, H, [(i, r, cx, cy, baseline)], columns): figure size, and per molecule its

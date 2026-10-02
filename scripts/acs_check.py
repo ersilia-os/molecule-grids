@@ -78,7 +78,7 @@ row("atom label size", cap / acs.cap_height_em() * ACS["bond"], ACS["label"])
 row("label margin", gap * ACS["bond"], ACS["margin"])
 
 # page: a small molecule at full print width is capped at the ACS bond length
-page = draw_grid(["CCCC"], ["Butane"], format="print", width=1.0, columns=3).svg
+page = draw_grid(["CCCC"], ["Butane"], format="print", width=1.0).svg
 wpt = float(re.search(r"width='([\d.]+)pt'", page).group(1))
 vbw = float(re.search(r"viewBox='0 0 ([\d.]+)", page).group(1))
 row("bond length (placed at 100 %)", drawn_bond(page) * wpt / vbw, ACS["bond"])

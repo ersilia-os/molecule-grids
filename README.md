@@ -20,7 +20,7 @@ smiles, names = read_molecules("hits.csv")  # .csv with a smiles column, or .smi
 draw_grid(smiles, names, format="slide", group=True, number=True, frame=True).save("hits.png")
 ```
 
-`draw_grid` takes SMILES or RDKit molecules. The returned `Grid` displays inline in Jupyter and reports its size, `bond_pt`, `columns`, `max_columns` and `capacity`.
+`draw_grid` takes SMILES or RDKit molecules. The returned `Grid` displays inline in Jupyter and reports its size, `bond_pt`, `columns` and `capacity`.
 
 ## Sizing
 
@@ -28,7 +28,7 @@ Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a fracti
 
 - Each molecule sits in a square cell, so the height follows from the number of rows.
 - All molecules share one bond length, set so the largest molecule fits its cell (at most 14.4 pt in print, 20 pt on slides).
-- Columns are limited so that atom labels stay at least 5 pt (print) or 8 pt (slide). Rows are added as needed.
+- The width sets the columns: about one per 1.75 in (print) or 1.9 in (slide), fewer if atom labels would drop below 5 pt (print) or 8 pt (slide). Rows are added as needed.
 - `squeeze` drops the square cells and reorders (and turns) molecules to fill the figure at the same bond length: `"grid"` (aligned, also `True`), `"rows"` (flowing like text) or `"free"` (interlocking outlines).
 - A figure holds up to 100 molecules; more raise `TooManyMolecules`. Save as `.gif` to get one frame per 100.
 
@@ -36,7 +36,7 @@ Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a fracti
 
 | Command | Description |
 |---|---|
-| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `-w`, `-c`, `--number`, `--group`, `--frame`, `--squeeze [grid\|rows\|free]`) |
+| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `-w`, `--number`, `--group`, `--frame`, `--squeeze [grid\|rows\|free]`) |
 | `molecule-grids examples -o FILE` | Write random global-health drugs as a `.smi` file |
 | `molecule-grids app` | Launch the Streamlit app |
 

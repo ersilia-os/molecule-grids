@@ -22,14 +22,13 @@ EXAMPLE = examples.as_text(examples.DEFAULT)
 
 
 @st.cache_data(show_spinner="Drawing…")
-def figure(smiles, names, fmt, width, columns, number, group, frame, squeeze):
-    """Draw the grid (``columns=None`` for the default); returns (pages, summary)."""
+def figure(smiles, names, fmt, width, number, group, frame, squeeze):
+    """Draw the grid; returns (pages, summary)."""
     grid = draw_grid(
         smiles,
         names,
         format=fmt,
         width=width,
-        columns=columns,
         number=number,
         group=group,
         frame=frame,
@@ -37,7 +36,6 @@ def figure(smiles, names, fmt, width, columns, number, group, frame, squeeze):
     )
     summary = {
         "columns": grid.columns,
-        "max_columns": grid.max_columns,
         "capacity": grid.capacity,
         "bond": grid.bond_pt,
         "width": grid.width_in,
@@ -176,9 +174,8 @@ with st.sidebar:
         format="%.2f",
         help=f"Fraction of the full width: {FORMATS['slide'].size_in:g} in for slides, "
         f"{FORMATS['print'].size_in:g} in for print (as in stylia). "
-        "Each molecule sits in a square cell, so the height follows.",
+        "The width sets the number of columns; each molecule sits in a square cell, so the height follows.",
     )
-    columns_slot = st.container()  # filled below: its range depends on the other settings
     number = st.toggle("Number compounds 1, 2, 3…", help="Replaces names with bold numbers in input order.")
     group = st.toggle(
         "Group by scaffold",
@@ -197,24 +194,6 @@ with st.sidebar:
         "Free: molecules interlock by their outlines. Numbers follow the new order.",
     )
     frame = st.toggle("Frame", value=False, help="A thin black outline around the whole figure.")
-
-    if smiles:
-        _, auto = figure(tuple(smiles), tuple(names), mode, width, None, number, group, frame, False)
-        with columns_slot:
-            if auto["max_columns"] > 1:
-                # The range follows width, format and molecules: at most the columns that keep
-                # atom labels legible. Changing it resets the choice to the default for the width.
-                cols = st.slider(
-                    "Columns",
-                    1,
-                    auto["max_columns"],
-                    auto["columns"],
-                    key=f"columns-{mode}-{width}-{auto['max_columns']}",
-                    help="Up to the most that keep atom labels legible at this width.",
-                )
-            else:
-                cols = 1
-                st.caption("Columns: 1 (the most that fit at this width)")
 
     st.space("large")
     st.caption(
@@ -243,7 +222,7 @@ if not smiles:
         )
     st.stop()
 
-pages, info = figure(tuple(smiles), tuple(names), mode, width, cols, number, group, frame, squeeze)
+pages, info = figure(tuple(smiles), tuple(names), mode, width, number, group, frame, squeeze)
 if len(pages) > 1:
     with st.container(key="callout-pages"):
         st.caption(

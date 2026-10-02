@@ -18,13 +18,13 @@ def width_in(svg):
 @pytest.mark.parametrize("fmt, full", [("print", 7.09), ("slide", 13.0)])
 def test_width_follows_format(fmt, full):
     for w in (1.0, 0.5):
-        grid = draw_grid(SMILES, NAMES, format=fmt, width=w, columns=2)
+        grid = draw_grid(SMILES, NAMES, format=fmt, width=w)
         assert width_in(grid.pages[0]) == pytest.approx(w * full, abs=0.01)
 
 
 @pytest.mark.parametrize("fmt, cap", [("print", 14.4), ("slide", 20.0)])
 def test_bond_capped(fmt, cap):
-    assert draw_grid(["CCO"], format=fmt, columns=4).bond_pt == pytest.approx(cap)
+    assert draw_grid(["CCO"], format=fmt).bond_pt == pytest.approx(cap)
 
 
 def test_save_types(tmp_path):
@@ -63,8 +63,8 @@ def ink_points(svg):
 
 @pytest.mark.parametrize("mode", [True, "rows", "free"])
 def test_squeeze(mode):
-    square = draw_grid(SMILES, NAMES, format="print", columns=4)
-    tight = draw_grid(SMILES, NAMES, format="print", columns=4, squeeze=mode, number=True)
+    square = draw_grid(SMILES, NAMES, format="print")
+    tight = draw_grid(SMILES, NAMES, format="print", squeeze=mode, number=True)
     assert tight.bond_pt == square.bond_pt
     assert tight.width_in <= square.width_in + 1e-6
     assert tight.width_in * tight.height_in < square.width_in * square.height_in
@@ -73,12 +73,12 @@ def test_squeeze(mode):
     inks = ink_points(tight.svg)
     gap = min(math.dist(p, q) for a, b in itertools.combinations(inks, 2) for p in a for q in b)
     assert gap > 0.5 * 26  # inks never closer than half a bond (26 drawing units)
-    again = draw_grid(SMILES, NAMES, format="print", columns=4, squeeze=mode, number=True)
+    again = draw_grid(SMILES, NAMES, format="print", squeeze=mode, number=True)
     assert again.svg == tight.svg  # deterministic
 
 
 def test_errors():
     with pytest.raises(ValueError, match="invalid SMILES"):
         draw_grid(["CCO", "not-a-smiles"])
-    with pytest.raises(ValueError, match="columns do not fit"):
-        draw_grid(SMILES, format="print", width=0.25, columns=10)
+    with pytest.raises(ValueError, match="width"):
+        draw_grid(SMILES, width=1.5)
