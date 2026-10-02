@@ -8,8 +8,8 @@ from pathlib import Path
 from rdkit import Chem, RDLogger
 
 from molecule_grids import sizing
-from molecule_grids.depict import acs, slide
-from molecule_grids.depict.draw import draw_one, ink_mask, rotate, text_width
+from molecule_grids.depict import acs, computational
+from molecule_grids.depict.draw import STYLES, draw_one, ink_mask, rotate, text_width
 from molecule_grids.layout import pack
 from molecule_grids.layout.scaffold import arrange, prepare
 from molecule_grids.utils.logging import logger
@@ -36,6 +36,8 @@ class Grid:
     ----------
     format : str
         ``"print"`` or ``"slide"``.
+    style : str
+        ``"medicinal"`` or ``"computational"``.
     names : list of str
         Caption of each molecule, in input order.
     order : list of int
@@ -54,8 +56,9 @@ class Grid:
         One SVG document per figure. More than one only when the molecules exceed ``capacity``.
     """
 
-    def __init__(self, fmt, names, order, geometry, columns, capacity, pages):
+    def __init__(self, fmt, style, names, order, geometry, columns, capacity, pages):
         self.format = fmt.name
+        self.style = style
         self._fmt = fmt
         self.names = names
         self.order = order
@@ -70,7 +73,7 @@ class Grid:
 
     def __repr__(self):
         return (
-            f"Grid(format={self.format!r}, molecules={len(self.names)}, columns={self.columns}, "
+            f"Grid(format={self.format!r}, style={self.style!r}, molecules={len(self.names)}, columns={self.columns}, "
             f"pages={len(self.pages)}, size={self.width_mm:.0f}x{self.height_mm:.0f} mm, "
             f"bond={self.bond_pt:.1f} pt)"
         )
@@ -147,6 +150,7 @@ def draw_grid(
     molecules,
     names=None,
     format="slide",
+    style="medicinal",
     width=1.0,
     size="medium",
     number=False,
@@ -168,7 +172,11 @@ def draw_grid(
     names : sequence of str, optional
         One caption per molecule.
     format : {"slide", "print"}
-        ``"slide"``: RDKit colours. ``"print"``: ChemDraw ACS Document 1996 style.
+        The page: its full width (330 or 180 mm), maximum height, standard bond length and
+        frame colour.
+    style : {"medicinal", "computational"}
+        How molecules are drawn: ``"medicinal"`` (medicinal chemist), ChemDraw ACS Document
+        1996 style in black and white; ``"computational"``, RDKit colours.
     width : float
         Fraction of the format's full width, in (0, 1]. Together with ``size`` it sets the
         number of columns. Rows are added as needed.
@@ -203,6 +211,8 @@ def draw_grid(
     fmt = sizing.get_format(format)
     if not 0 < width <= 1:
         raise ValueError(f"width is a fraction of the full {fmt.name} width and must be in (0, 1], not {width}")
+    if style not in STYLES:
+        raise ValueError(f"style must be one of {list(STYLES)}, not {style!r}")
     if size not in sizing.SIZES:
         raise ValueError(f"size must be one of {list(sizing.SIZES)}, not {size!r}")
     factor = sizing.SIZES[size]
@@ -216,9 +226,9 @@ def draw_grid(
         raise ValueError(f"got {len(names)} names for {len(molecules)} molecules")
 
     mols, buckets = prepare(_to_mols(molecules))
-    drawn = [draw_one(m, fmt.name) for m in mols]
+    drawn = [draw_one(m, style) for m in mols]
     bold = [bool(COMPOUND_NUMBER.match(n)) for n in names]
-    caption = (acs.LABEL_RATIO if fmt.name == "print" else slide.CAPTION_RATIO) * acs.BOND
+    caption = (acs.LABEL_RATIO if style == "medicinal" else computational.CAPTION_RATIO) * acs.BOND
     capw = [text_width(n, caption, b) if n else 0.0 for n, b in zip(names, bold)]
     wide = [max(d[3], c) for d, c in zip(drawn, capw)]  # width each molecule needs
     sides = sorted(max(w, d[4]) for w, d in zip(wide, drawn))
@@ -237,7 +247,7 @@ def draw_grid(
     def get(i, r):
         """Drawing of molecule ``i`` turned ``r`` quarter turns (drawn on first use)."""
         if (i, r) not in variants:
-            variants[i, r] = draw_one(rotate(mols[i], r), fmt.name)
+            variants[i, r] = draw_one(rotate(mols[i], r), style)
         return variants[i, r]
 
     mode = SQUEEZE.get(squeeze, "bad") if isinstance(squeeze, (bool, str, type(None))) else "bad"
@@ -257,7 +267,7 @@ def draw_grid(
         names = [None] * len(order)
         for k, i in enumerate(order):
             names[i] = str(k + 1)
-    line = acs.BOND * (acs.LINE_RATIO if fmt.name == "print" else slide.LINE_RATIO)
+    line = acs.BOND * (acs.LINE_RATIO if style == "medicinal" else computational.LINE_RATIO)  # as the bonds
     pages = _render(geo, layouts, get, names, bold, (line, FRAME_COLOR[fmt.name]) if frame else None)
     used = None if mode == "free" else max(c for *_, c in layouts)
     if len(layouts) > 1:  # what the first page holds
@@ -265,7 +275,7 @@ def draw_grid(
     else:  # estimate for typical molecules; a squeezed page may hold more
         capacity = min(MAX_MOLECULES, columns * full_rows)
         capacity = max(capacity, len(mols)) if mode else capacity
-    return Grid(fmt, names, order, geo, used, capacity, pages)
+    return Grid(fmt, style, names, order, geo, used, capacity, pages)
 
 
 def _paginate(n, max_h, build):

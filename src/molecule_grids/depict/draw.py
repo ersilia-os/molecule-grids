@@ -8,7 +8,7 @@ from rdkit.Chem import rdAbbreviations
 from rdkit.Chem.Draw import rdMolDraw2D
 
 from molecule_grids.depict import acs
-from molecule_grids.depict.slide import slide_options
+from molecule_grids.depict.computational import computational_options
 
 # Groups drawn as condensed labels (journal convention). Labels auto-flip (CF3 -> F3C).
 ABBREVIATE = ("CF3", "NO2")
@@ -131,8 +131,13 @@ def ink_mask(drawn, res, clearance, caption=None):
     return np.asarray(img) > 0, left - x0, top - y0
 
 
-def draw_one(mol, fmt="print"):
+STYLES = ("medicinal", "computational")
+
+
+def draw_one(mol, style="medicinal"):
     """Draw one molecule with 2D coordinates at ``acs.BOND`` units per bond.
+
+    ``style`` is ``"medicinal"`` (ChemDraw ACS 1996) or ``"computational"`` (RDKit colours).
 
     Returns
     -------
@@ -151,10 +156,10 @@ def draw_one(mol, fmt="print"):
     ch = (max(y for _, y in xy) - min(y for _, y in xy)) * unit + 8 * acs.BOND
     d = rdMolDraw2D.MolDraw2DSVG(int(cw), int(ch))
     o = d.drawOptions()
-    if fmt == "print":
+    if style == "medicinal":
         acs.acs_options(o)
     else:
-        slide_options(o)
+        computational_options(o)
     o.fixedBondLength = acs.BOND
     o.clearBackground = False
     pm = rdMolDraw2D.PrepareMolForDrawing(chemdraw_stereo_labels(mol), addChiralHs=False)
@@ -164,7 +169,7 @@ def draw_one(mol, fmt="print"):
     d.FinishDrawing()
     svg = d.GetDrawingText()
     inner = svg[svg.index("<!-- END OF HEADER -->") : svg.rindex("</svg>")]
-    if fmt == "print":  # ACS hash spacing and wedge width
+    if style == "medicinal":  # ACS hash spacing and wedge width
         inner = acs.respace_hashes(inner, hashed)
         inner = acs.set_wedge_width(inner)
     xs, ys = [], []

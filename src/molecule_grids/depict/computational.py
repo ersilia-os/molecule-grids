@@ -1,4 +1,4 @@
-"""Slide drawing style: RDKit's colour convention with the print label proportions."""
+"""Computational drawing style: RDKit's colour convention with the ACS label proportions."""
 
 from molecule_grids.depict import acs
 
@@ -20,8 +20,8 @@ PALETTE = {
 }
 
 
-def slide_options(opts):
-    """Apply slide drawing options in place: RDKit colours, Arial, ACS label proportions."""
+def computational_options(opts):
+    """Apply computational drawing options in place: RDKit colours, Arial, ACS label proportions."""
     opts.fontFile = acs.ARIAL
     opts.baseFontSize = acs.BASE_FONT_SIZE
     opts.bondLineWidth = LINE_RATIO * acs.BOND

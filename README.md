@@ -1,6 +1,6 @@
 # Grids of chemical structures for slides and papers
 
-Draw SMILES as a clean grid of 2D structures. **Slide** format uses RDKit colours. **Print** format follows the ChemDraw *ACS Document 1996* style (Arial labels, 14.4 pt bonds at most). Analogues sharing a scaffold are drawn in the same orientation.
+Draw SMILES as a clean grid of 2D structures, for slides or print. Two drawing styles: **medicinal chemist** (default; ChemDraw *ACS Document 1996*, black and white, Arial labels) and **computational** (RDKit colours). Analogues sharing a scaffold are drawn in the same orientation.
 
 ```bash
 pip install git+https://github.com/ersilia-os/molecule-grids.git          # add [app] for the web app
@@ -17,7 +17,7 @@ grid = draw_grid(["CCO", "c1ccccc1O"], names=["Ethanol", "Phenol"], format="prin
 grid.save("grid.svg")  # .svg, .png, .pdf or .gif
 
 smiles, names = read_molecules("hits.csv")  # .csv with a smiles column, or .smi lines "SMILES name"
-draw_grid(smiles, names, format="slide", group=True, number=True).save("hits.png")
+draw_grid(smiles, names, format="slide", style="computational", number=True).save("hits.png")
 ```
 
 `draw_grid` takes SMILES or RDKit molecules. The returned `Grid` displays inline in Jupyter and reports its size, `bond_pt`, `columns` and `capacity`.
@@ -36,7 +36,7 @@ Sizes follow [stylia](https://github.com/ersilia-os/stylia): `width` is a propor
 
 | Command | Description |
 |---|---|
-| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `-w`, `-s small\|medium\|large`, `--number`, `--group`, `--no-frame`, `--squeeze rows\|grid\|free\|off`) |
+| `molecule-grids draw INPUT -o OUT` | Draw a grid from a `.smi`/`.csv` file (`-f print\|slide`, `--style medicinal\|computational`, `-w`, `-s small\|medium\|large`, `--number`, `--group`, `--no-frame`, `--squeeze rows\|grid\|free\|off`) |
 | `molecule-grids examples -o FILE` | Write random global-health drugs as a `.smi` file |
 | `molecule-grids app` | Launch the Streamlit app |
 

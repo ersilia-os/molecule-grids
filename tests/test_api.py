@@ -52,6 +52,18 @@ def test_capacity_and_gif(tmp_path):
     assert gif.n_frames == len(grid.pages)
 
 
+def test_style_is_independent_of_format():
+    colours = {}
+    for style in ("medicinal", "computational"):
+        for fmt in ("print", "slide"):
+            svg = draw_grid(["OCCN"], format=fmt, style=style, frame=False).svg
+            colours[style, fmt] = set(re.findall(r"#[0-9A-F]{6}", svg)) - {"#FFFFFF", "#000000"}
+    assert not colours["medicinal", "print"] and not colours["medicinal", "slide"]  # black and white
+    assert colours["computational", "print"] and colours["computational", "slide"]  # coloured atoms
+    with pytest.raises(ValueError, match="style"):
+        draw_grid(["CCO"], style="pretty")
+
+
 def test_frame():
     assert "stroke='#50285A'" in draw_grid(["CCO"]).svg  # on by default; plum on slides
     assert "stroke='#000000'" in draw_grid(["CCO"], format="print").svg  # black in print

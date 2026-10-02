@@ -6,7 +6,22 @@ from molecule_grids import FORMATS, TooManyMolecules, draw_grid, read_molecules
 @click.command()
 @click.argument("input", type=click.Path(exists=True, dir_okay=False))
 @click.option("-o", "--output", required=True, type=click.Path(dir_okay=False), help="Output .svg, .png, .pdf or .gif.")
-@click.option("-f", "--format", "fmt", type=click.Choice(sorted(FORMATS)), default="slide", show_default=True)
+@click.option(
+    "-f",
+    "--format",
+    "fmt",
+    type=click.Choice(sorted(FORMATS)),
+    default="slide",
+    show_default=True,
+    help="Page: slide or print.",
+)
+@click.option(
+    "--style",
+    type=click.Choice(["medicinal", "computational"]),
+    default="medicinal",
+    show_default=True,
+    help="Medicinal chemist (ChemDraw ACS 1996) or computational (RDKit colours).",
+)
 @click.option("-w", "--width", type=float, default=1.0, show_default=True, help="Fraction of the full format width.")
 @click.option(
     "-s",
@@ -26,7 +41,7 @@ from molecule_grids import FORMATS, TooManyMolecules, draw_grid, read_molecules
     show_default=True,
     help="Reorder and turn molecules to fill the figure; 'off' keeps square cells in input order.",
 )
-def draw(input, output, fmt, width, size, number, group, frame, squeeze):
+def draw(input, output, fmt, style, width, size, number, group, frame, squeeze):
     """Draw a grid from INPUT (.smi/.txt with 'SMILES name' lines, or .csv with a smiles column)."""
     smiles, names = read_molecules(input)
     if not smiles:
@@ -36,6 +51,7 @@ def draw(input, output, fmt, width, size, number, group, frame, squeeze):
             smiles,
             names,
             format=fmt,
+            style=style,
             width=width,
             size=size,
             number=number,

@@ -22,12 +22,13 @@ EXAMPLE = examples.as_text(examples.DEFAULT)
 
 
 @st.cache_data(show_spinner="Drawing…")
-def figure(smiles, names, fmt, width, size, number, group, frame, squeeze):
+def figure(smiles, names, fmt, style, width, size, number, group, frame, squeeze):
     """Draw the grid; returns (pages, summary)."""
     grid = draw_grid(
         smiles,
         names,
         format=fmt,
+        style=style,
         width=width,
         size=size,
         number=number,
@@ -162,9 +163,19 @@ with st.sidebar:
         required=True,
         width="stretch",
         format_func=lambda m: {"slide": ":material/desktop_windows: Slide", "print": ":material/print: Print"}[m],
-        help="Slide: RDKit colours, 330 mm wide at full width. "
-        "Print: ChemDraw ACS 1996 style, 180 mm (two journal columns) at full width, 14.4 pt bonds "
-        "at 100 %; insert the SVG at 100 % in Word or Illustrator to keep the dimensions.",
+        help="The page. Slide: 330 mm wide at full width, up to 186 mm tall (16:9), 20 pt bonds at "
+        "Medium, plum frame. Print: 180 mm (two journal columns), up to 247 mm tall, 14.4 pt bonds "
+        "(ACS), black frame; insert the SVG at 100 % in Word or Illustrator to keep the dimensions.",
+    )
+    style = st.segmented_control(
+        "Drawing style",
+        ["medicinal", "computational"],
+        default="medicinal",
+        required=True,
+        width="stretch",
+        format_func=lambda s: {"medicinal": "Medicinal chemist", "computational": "Computational"}[s],
+        help="How molecules are drawn. Medicinal chemist: ChemDraw ACS 1996 style, black and white. "
+        "Computational: RDKit's atom colours.",
     )
     full_mm = FORMATS[mode].size_in * 25.4
     share = st.slider(
@@ -242,7 +253,7 @@ if not smiles:
         )
     st.stop()
 
-pages, info = figure(tuple(smiles), tuple(names), mode, width, size, number, group, frame, squeeze)
+pages, info = figure(tuple(smiles), tuple(names), mode, style, width, size, number, group, frame, squeeze)
 if len(pages) > 1:
     with st.container(key="callout-pages"):
         st.caption(
@@ -259,7 +270,7 @@ with st.container(border=True, key="card-figure"):
     with st.container(horizontal=True, vertical_alignment="center"):
         st.caption(
             f"{len(smiles)} structure{'s' if len(smiles) != 1 else ''} · "
-            f"{'ACS 1996 print style' if mode == 'print' else 'Slide style'} · "
+            f"{mode.capitalize()} · {'medicinal chemist' if style == 'medicinal' else 'computational'} · "
             f"{info['width']:.0f} × {info['height']:.0f} mm · bond {info['bond']:.1f} pt"
         )
         if len(pages) > 1:
