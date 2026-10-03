@@ -290,6 +290,12 @@ with st.sidebar:
     )
 
     st.space("large")
+    st.success(
+        "**Working with many molecules or in a pipeline?** The same figures are available from Python "
+        "(`draw_grid`) and the command line (`molecule-grids draw`). See "
+        "[ersilia-os/molecule-grids](https://github.com/ersilia-os/molecule-grids).",
+        icon=":material/terminal:",
+    )
     st.caption(
         "Brought to you by the [Ersilia Open Source Initiative](https://ersilia.io), "
         "a tech-nonprofit fueling sustainable research in the Global South."
