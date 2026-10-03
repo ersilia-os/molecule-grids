@@ -107,6 +107,9 @@ st.html("""
   [data-testid="stSidebarCollapseButton"] button::before { transform: translateX(1.5px) rotate(45deg); }
   [data-testid="stExpandSidebarButton"]::before { transform: translateX(-1.5px) rotate(-135deg); }
 
+  /* Streamlit leaves 6rem under the sidebar; the footer caption only needs a little. */
+  [data-testid="stSidebarUserContent"] { padding-bottom: 2rem !important; }
+
   /* Room for "SMILES name" on one line; min-width keeps the sidebar drag-resizable. */
   [data-testid="stSidebar"][aria-expanded="true"] { min-width: 440px !important; }
 
