@@ -3,6 +3,7 @@
 FAMILIES share a Bemis-Murcko scaffold, so "Group by scaffold" has analogues to align.
 SINGLES are structurally unrelated. Checked against their molecular formulas.
 """
+
 import random
 
 FAMILIES = [

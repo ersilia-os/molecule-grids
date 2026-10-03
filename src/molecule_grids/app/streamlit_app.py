@@ -85,12 +85,11 @@ st.set_page_config(page_title="Molecule grids", page_icon=FAVICON, layout="wide"
 st.logo(WORDMARK, size="large", link="https://ersilia.io")
 st.html("""
 <style>
-  /* No page title, so the card starts level with the wordmark, not under a 6rem pad. */
-  [data-testid="stMainBlockContainer"] { padding: 2rem 2rem !important; }
-  /* Sidebar collapsed: no logo in the header, just clear the toggle. */
+  /* No page title, so no 6rem pad, but content starts below the header: on Streamlit
+     Community Cloud it is an opaque 56px bar (Fork, GitHub) that would cover the panel. */
+  [data-testid="stMainBlockContainer"] { padding: 4.25rem 2rem 2rem !important; }
+  /* Sidebar collapsed: no logo in the header. */
   [data-testid="stHeader"] [data-testid="stLogoLink"] { display: none !important; }
-  .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) [data-testid="stMainBlockContainer"] {
-      padding-top: 3.5rem !important; }
 
   /* Sidebar toggles: a hairline chevron drawn in CSS, instead of the heavy icon-font glyph
      (Streamlit's bundled Material Symbols has a single, fixed weight). */
