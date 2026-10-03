@@ -3,29 +3,44 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "my-package"
+name = "molecule-grids"
 version = "0.1.0"
-description = "A short description of my package"
+description = "Grids of 2D chemical structures for slides and manuscripts"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-  {name="Your Name", email="you@ersilia.io"}
+  {name="Miquel Duran-Frigola", email="miquel@ersilia.io"}
 ]
 requires-python = ">=3.10"
 
 dependencies = [
-  "numpy==2.2.6",
+  "cairosvg==2.9.1",
+  "click==8.5.0",
+  "pillow==12.3.0",
+  "rdkit==2026.3.6",
+  "rich==15.0.0",
 ]
 
 [project.optional-dependencies]
-dev = [
-  "pytest==9.0.3",
-  "ruff==0.15.13",
+app = [
+  "streamlit==1.64.0",
 ]
+dev = [
+  "pytest==9.1.1",
+  "ruff==0.16.9",
+]
+
+[project.scripts]
+molecule-grids = "molecule_grids.cli.create_cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+molecule_grids = ["fonts/*", "app/assets/*", "app/.streamlit/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.ruff]
+line-length = 120

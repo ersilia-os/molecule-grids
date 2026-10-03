@@ -1,0 +1,39 @@
+[theme]
+base = "light"
+
+# Ersilia house style, as in ersilia-os/rafiki-workshop-2026.
+# Plum #50285A is identity and stays out of the chrome (logo, favicon only).
+# Periwinkle carries every interaction.
+backgroundColor = "#FAFAFC"
+secondaryBackgroundColor = "#F4F4F8"
+textColor = "#2C3E50"
+primaryColor = "#6C5CE7"   # periwinkle: buttons, sliders, anything you can press
+linkColor = "#6C5CE7"
+linkUnderline = false
+borderColor = "#E6E6EE"
+showWidgetBorder = true
+showSidebarBorder = true
+
+baseRadius = "0.75rem"
+buttonRadius = "0.5rem"
+baseFontSize = 15
+font = "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+codeFont = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+headingFontSizes = ["2rem", "1.5rem", "1.3rem", "1.05rem", "0.95rem", "0.85rem"]
+headingFontWeights = [700, 600, 600, 500, 500, 500]
+
+# Keep st.info/st.error on house hues rather than Streamlit's defaults.
+blueColor = "#247dad"
+greenColor = "#3F9D6B"
+orangeColor = "#C98A1E"
+redColor = "#D9534F"
+violetColor = "#6C5CE7"
+
+[theme.sidebar]
+# White, so the sidebar reads as a panel against the page ground.
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F4F8"
+
+[client]
+# Hide "Deploy" and the developer menu.
+toolbarMode = "minimal"
