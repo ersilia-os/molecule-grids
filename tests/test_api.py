@@ -46,6 +46,11 @@ def test_save_types(tmp_path):
     for ext in ("svg", "png", "pdf"):
         (path,) = grid.save(tmp_path / f"grid.{ext}")
         assert path.stat().st_size > 0
+    from PIL import Image
+
+    png = Image.open(tmp_path / "grid.png")  # same pixel size as the SVG at 300 dpi
+    assert abs(png.width - grid.width_mm / 25.4 * 300) <= 2
+    assert (tmp_path / "grid.pdf").read_bytes().startswith(b"%PDF")
 
 
 def test_pages_save_as_numbered_files(tmp_path):
@@ -156,6 +161,15 @@ def test_group_keeps_families_together(mode):
     for fam in FAMILIES:
         pos = sorted(where[smiles.index(s)] for s, _ in fam)
         assert pos == list(range(pos[0], pos[0] + len(pos)))  # consecutive in reading order
+
+
+def test_theme_copies_match():
+    from pathlib import Path
+
+    root = Path(__file__).parents[1]
+    repo = (root / ".streamlit" / "config.toml").read_text()  # used by Streamlit Community Cloud
+    package = (root / "src" / "molecule_grids" / "app" / ".streamlit" / "config.toml").read_text()
+    assert repo == package  # used by `molecule-grids app`
 
 
 def test_errors():

@@ -6,7 +6,7 @@ Draw SMILES as a clean grid of 2D structures, for slides or print. Two drawing s
 pip install git+https://github.com/ersilia-os/molecule-grids.git          # add [app] for the web app
 ```
 
-PNG and PDF export need the cairo library (`brew install cairo` or `apt install libcairo2`).
+On Linux servers, RDKit's drawing code needs three small X libraries: `apt install libxrender1 libxext6 libexpat1` (listed in `packages.txt` for Streamlit Community Cloud). Nothing else is needed: PNG and PDF are rendered with self-contained wheels (resvg, typst).
 
 ## Python
 
